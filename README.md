@@ -23,6 +23,19 @@ Sistema de delivery de bebidas dividido em microsserviços. Cada serviço tem se
 | Pedidos | bd_pedidos | pedidos-service |
 | Pagamento | bd_pagamentos | pagamento-service |
 
+## Documentação
+
+- [Deploy na nuvem (TiDB + Render)](docs/DEPLOY.md)
+- [Contratos entre os serviços](docs/CONTRATOS.md)
+
+## Links
+
+| | URL |
+|---|---|
+| Front | https://delivery-bebidas-front.onrender.com |
+| Pedidos | https://pedidos-service-caio.onrender.com |
+| Pagamento | https://pagamento-service-caio.onrender.com |
+
 ## Pedidos e Pagamento (Caio)
 
 Requisitos: Node.js 18+ e MySQL 8.
