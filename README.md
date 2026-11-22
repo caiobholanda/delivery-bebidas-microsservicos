@@ -25,13 +25,27 @@ Sistema de delivery de bebidas dividido em microsserviços. Cada serviço tem se
 
 ## Pedidos e Pagamento (Caio)
 
-Para rodar localmente:
+Requisitos: Node.js 18+ e MySQL 8.
+
+Para rodar localmente (faça o mesmo em `pagamento-service`):
 
 ```bash
 cd pedidos-service
 cp .env.example .env
 npm install
+```
+
+Abra o `.env` e troque `SUA_SENHA` pela senha do seu MySQL. Se o MySQL não estiver na porta 3306, ajuste também a porta. Depois:
+
+```bash
 npm start
 ```
 
-O mesmo vale para `pagamento-service`. As tabelas são criadas automaticamente ao iniciar.
+O banco e as tabelas são criados automaticamente na primeira execução.
+
+| Variável | Descrição |
+|---|---|
+| `DATABASE_URL` | `mysql://usuario:senha@host:porta/banco` |
+| `DB_SSL` | `true` para bancos na nuvem que exigem SSL |
+| `CATALOGO_URL`, `ESTOQUE_URL`, `ENTREGAS_URL` | Endereços dos serviços dos colegas |
+| `PAGAMENTO_URL` / `PEDIDOS_URL` | Endereço do outro serviço do Caio |
