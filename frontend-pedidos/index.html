@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delivery de Bebidas - Pedidos</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 0 16px; background: #f4f6f8; color: #222; }
+    h1 { color: #1d4e89; }
+    section { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+    input, select, button { padding: 8px; margin: 4px 4px 4px 0; border: 1px solid #ccc; border-radius: 4px; }
+    button { background: #1d4e89; color: #fff; border: none; cursor: pointer; }
+    button.secundario { background: #888; }
+    button.perigo { background: #c0392b; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 6px; border-bottom: 1px solid #eee; }
+    .oculto { display: none; }
+    #mensagem { padding: 10px; border-radius: 4px; display: none; }
+    #mensagem.erro { display: block; background: #fdecea; color: #c0392b; }
+    #mensagem.ok { display: block; background: #e8f5e9; color: #2e7d32; }
+    .pix { font-family: monospace; word-break: break-all; background: #eef; padding: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Delivery de Bebidas</h1>
+  <div id="mensagem"></div>
+
+  <section>
+    <label>Cliente ID: <input type="number" id="clienteId" value="1" min="1"></label>
+    <button onclick="carregarTudo()">Carregar</button>
+  </section>
+
+  <section>
+    <h2>Adicionar ao carrinho</h2>
+    <input type="number" id="bebidaId" placeholder="ID da bebida" min="1">
+    <input type="number" id="quantidade" placeholder="Quantidade" value="1" min="1">
+    <button onclick="adicionarItem()">Adicionar</button>
+  </section>
+
+  <section>
+    <h2>Carrinho</h2>
+    <table>
+      <thead><tr><th>Bebida</th><th>Preço</th><th>Qtd</th><th>Total</th><th></th></tr></thead>
+      <tbody id="itensCarrinho"></tbody>
+    </table>
+    <p>
+      <input id="cupom" placeholder="Cupom">
+      <button onclick="aplicarCupom()">Aplicar cupom</button>
+      <button class="secundario" onclick="removerCupom()">Remover cupom</button>
+    </p>
+    <p id="resumo"></p>
+  </section>
+
+  <section>
+    <h2>Finalizar pedido</h2>
+    <input id="endereco" placeholder="Endereço de entrega" size="50">
+    <select id="formaPagamento" onchange="mostrarCampos()">
+      <option value="pix">Pix</option>
+      <option value="cartao">Cartão</option>
+      <option value="dinheiro">Dinheiro</option>
+    </select>
+    <div id="camposCartao" class="oculto">
+      <input id="cartaoNumero" placeholder="Número do cartão">
+      <input id="cartaoNome" placeholder="Nome no cartão">
+      <input id="cartaoValidade" placeholder="MM/AA" size="6">
+      <input id="cartaoCvv" placeholder="CVV" size="4">
+    </div>
+    <div id="camposDinheiro" class="oculto">
+      <input type="number" id="trocoPara" placeholder="Troco para (R$)">
+    </div>
+    <button onclick="finalizarPedido()">Finalizar</button>
+    <div id="resultadoPagamento"></div>
+  </section>
+
+  <section>
+    <h2>Meus pedidos</h2>
+    <table>
+      <thead><tr><th>#</th><th>Data</th><th>Status</th><th>Pagamento</th><th>Total</th><th></th></tr></thead>
+      <tbody id="historico"></tbody>
+    </table>
+  </section>
+
+  <script>
+    const PEDIDOS_URL = 'http://localhost:3001';
+    const PAGAMENTO_URL = 'http://localhost:3002';
+
+    function clienteId() {
+      return document.getElementById('clienteId').value;
+    }
+
+    function dinheiro(valor) {
+      return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function mostrarMensagem(texto, tipo) {
+      const caixa = document.getElementById('mensagem');
+      caixa.textContent = texto;
+      caixa.className = tipo;
+    }
+
+    async function api(url, metodo = 'GET', corpo) {
+      const resposta = await fetch(url, {
+        method: metodo,
+        headers: { 'Content-Type': 'application/json' },
+        body: corpo ? JSON.stringify(corpo) : undefined
+      });
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(dados.erro || 'Erro na requisição');
+      return dados;
+    }
+
+    function mostrarCarrinho(carrinho) {
+      const corpo = document.getElementById('itensCarrinho');
+      corpo.innerHTML = '';
+      carrinho.itens.forEach((item) => {
+        const linha = document.createElement('tr');
+        linha.innerHTML = `
+          <td>${item.nome}</td>
+          <td>${dinheiro(item.precoUnitario)}</td>
+          <td><input type="number" min="0" value="${item.quantidade}" style="width:60px"
+                onchange="alterarQuantidade(${item.bebidaId}, this.value)"></td>
+          <td>${dinheiro(item.total)}</td>
+          <td><button class="perigo" onclick="removerItem(${item.bebidaId})">Remover</button></td>`;
+        corpo.appendChild(linha);
+      });
+
+      let resumo = `Subtotal: ${dinheiro(carrinho.subtotal)} | Desconto: ${dinheiro(carrinho.desconto)} | <b>Total: ${dinheiro(carrinho.total)}</b>`;
+      if (carrinho.cupom) resumo += ` | Cupom: ${carrinho.cupom}`;
+      if (carrinho.cupomAviso) resumo += ` <span style="color:#c0392b">(${carrinho.cupomAviso})</span>`;
+      document.getElementById('resumo').innerHTML = resumo;
+    }
+
+    async function carregarCarrinho() {
+      mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId()}`));
+    }
+
+    async function carregarHistorico() {
+      const pedidos = await api(`${PEDIDOS_URL}/pedidos/cliente/${clienteId()}`);
+      const corpo = document.getElementById('historico');
+      corpo.innerHTML = '';
+      pedidos.forEach((pedido) => {
+        const podeCancelar = ['aguardando_pagamento', 'confirmado'].includes(pedido.status);
+        const linha = document.createElement('tr');
+        linha.innerHTML = `
+          <td>${pedido.id}</td>
+          <td>${new Date(pedido.criadoEm).toLocaleString('pt-BR')}</td>
+          <td>${pedido.status}</td>
+          <td>${pedido.formaPagamento}</td>
+          <td>${dinheiro(pedido.total)}</td>
+          <td>${podeCancelar ? `<button class="perigo" onclick="cancelarPedido(${pedido.id})">Cancelar</button>` : ''}</td>`;
+        corpo.appendChild(linha);
+      });
+    }
+
+    async function executar(acao, sucesso) {
+      try {
+        await acao();
+        if (sucesso) mostrarMensagem(sucesso, 'ok');
+      } catch (erro) {
+        mostrarMensagem(erro.message, 'erro');
+      }
+    }
+
+    function carregarTudo() {
+      executar(async () => {
+        await carregarCarrinho();
+        await carregarHistorico();
+      });
+    }
+
+    function adicionarItem() {
+      executar(async () => {
+        const carrinho = await api(`${PEDIDOS_URL}/carrinho/${clienteId()}/itens`, 'POST', {
+          bebidaId: Number(document.getElementById('bebidaId').value),
+          quantidade: Number(document.getElementById('quantidade').value)
+        });
+        mostrarCarrinho(carrinho);
+      }, 'Item adicionado');
+    }
+
+    function alterarQuantidade(bebidaId, quantidade) {
+      executar(async () => {
+        mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId()}/itens/${bebidaId}`, 'PUT', { quantidade: Number(quantidade) }));
+      }, 'Quantidade atualizada');
+    }
+
+    function removerItem(bebidaId) {
+      executar(async () => {
+        mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId()}/itens/${bebidaId}`, 'DELETE'));
+      }, 'Item removido');
+    }
+
+    function aplicarCupom() {
+      executar(async () => {
+        mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId()}/cupom`, 'POST', {
+          codigo: document.getElementById('cupom').value
+        }));
+      }, 'Cupom aplicado');
+    }
+
+    function removerCupom() {
+      executar(async () => {
+        mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId()}/cupom`, 'DELETE'));
+      }, 'Cupom removido');
+    }
+
+    function mostrarCampos() {
+      const forma = document.getElementById('formaPagamento').value;
+      document.getElementById('camposCartao').className = forma === 'cartao' ? '' : 'oculto';
+      document.getElementById('camposDinheiro').className = forma === 'dinheiro' ? '' : 'oculto';
+    }
+
+    function finalizarPedido() {
+      executar(async () => {
+        const forma = document.getElementById('formaPagamento').value;
+        const corpo = {
+          clienteId: Number(clienteId()),
+          endereco: document.getElementById('endereco').value,
+          formaPagamento: forma
+        };
+        if (forma === 'cartao') {
+          corpo.cartao = {
+            numero: document.getElementById('cartaoNumero').value,
+            nome: document.getElementById('cartaoNome').value,
+            validade: document.getElementById('cartaoValidade').value,
+            cvv: document.getElementById('cartaoCvv').value
+          };
+        }
+        if (forma === 'dinheiro') corpo.trocoPara = document.getElementById('trocoPara').value;
+
+        const { pedido, pagamento } = await api(`${PEDIDOS_URL}/pedidos`, 'POST', corpo);
+        const area = document.getElementById('resultadoPagamento');
+        area.innerHTML = `<p>Pedido #${pedido.id} criado. Status: <b>${pedido.status}</b></p>`;
+
+        if (pagamento.metodo === 'pix') {
+          area.innerHTML += `
+            <p>Pix copia e cola:</p>
+            <div class="pix">${pagamento.codigoPix}</div>
+            <button onclick="simularPix(${pagamento.id})">Simular pagamento do Pix</button>`;
+        }
+        if (pagamento.metodo === 'cartao') {
+          area.innerHTML += `<p>Cartão ${pagamento.cartaoBandeira} final ${pagamento.cartaoFinal} aprovado.</p>`;
+        }
+        if (pagamento.metodo === 'dinheiro' && pagamento.troco !== null) {
+          area.innerHTML += `<p>Levar troco de ${dinheiro(pagamento.troco)}.</p>`;
+        }
+
+        await carregarCarrinho();
+        await carregarHistorico();
+      }, 'Pedido finalizado');
+    }
+
+    function simularPix(pagamentoId) {
+      executar(async () => {
+        await api(`${PAGAMENTO_URL}/pagamentos/${pagamentoId}/confirmar`, 'POST');
+        document.getElementById('resultadoPagamento').innerHTML = '<p>Pix confirmado. Pedido enviado para entrega.</p>';
+        await carregarHistorico();
+      }, 'Pagamento confirmado');
+    }
+
+    function cancelarPedido(id) {
+      executar(async () => {
+        await api(`${PEDIDOS_URL}/pedidos/${id}/cancelar`, 'PATCH');
+        await carregarHistorico();
+      }, `Pedido #${id} cancelado`);
+    }
+
+    carregarTudo();
+  </script>
+</body>
+</html>
