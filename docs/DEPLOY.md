@@ -42,7 +42,7 @@ O TiDB exige conexão com TLS (SSL).
 
 Se a senha tiver caracteres especiais, substitua: `@` → `%40`, `#` → `%23`, `/` → `%2F`, `:` → `%3A`, `%` → `%25`, `?` → `%3F`.
 
-O banco (`CREATE DATABASE`) precisa existir. Os serviços de Pedidos e Pagamento criam sozinhos. Nos outros, rode no **SQL Editor** do TiDB:
+O banco (`CREATE DATABASE`) precisa existir. Os serviços de Pedidos, Pagamento, Estoque e Entregas criam sozinhos. Nos outros, rode no **SQL Editor** do TiDB:
 
 ```sql
 CREATE DATABASE nome_do_banco;
@@ -84,6 +84,8 @@ Start Command, conforme o framework:
 | Flask | `gunicorn app:app --bind 0.0.0.0:$PORT` |
 
 Troque `main:app` / `app:app` pelo `arquivo:variável` do seu projeto. Coloque `uvicorn` ou `gunicorn` no `requirements.txt`.
+
+No Estoque e no Entregas o Start Command é `uvicorn main:app --host 0.0.0.0 --port $PORT`. No Entregas, coloque também `PEDIDOS_URL` nas variáveis. Depois de publicar, peça para quem cuida do Pedidos colocar `ESTOQUE_URL` e `ENTREGAS_URL` no Render dele.
 
 ### Java
 
@@ -151,9 +153,10 @@ O front chama os serviços direto do navegador. Todo serviço precisa liberar CO
 |---|---|---|
 | Autenticação | João Gabriel | https://autenticacao-service-joao.onrender.com |
 | Catálogo | João Gabriel | https://catalogo-service-joao.onrender.com |
-| Estoque | Vitor Costa | |
-| Entregas | Vitor Costa | |
+| Estoque | Vitor Costa | https://estoque-service-vitor.onrender.com |
+| Entregas | Vitor Costa | https://entregas-service-vitor.onrender.com |
 | Pedidos | Caio Barsi | https://pedidos-service-caio.onrender.com |
 | Pagamento | Caio Barsi | https://pagamento-service-caio.onrender.com |
 | Front | Caio Barsi | https://delivery-bebidas-front.onrender.com |
 | Front (login e catálogo) | João Gabriel | https://delivery-bebidas-front-joao.onrender.com |
+| Front (estoque e entregas) | Vitor Costa | https://delivery-bebidas-front-vitor.onrender.com |

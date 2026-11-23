@@ -150,6 +150,77 @@ Corpo do POST e do PUT:
 
 ---
 
+## Rotas do Estoque e das Entregas (Vitor)
+
+### Estoque
+
+| Método | Rota | Corpo | Quem usa |
+|---|---|---|---|
+| GET | `/estoque` | | Front |
+| GET | `/estoque/reposicao` | | Front (bebidas no mínimo ou abaixo dele) |
+| GET | `/estoque/{bebidaId}` | | Front e serviço de Pedidos |
+| GET | `/estoque/{bebidaId}/movimentacoes` | | Front (últimas 50) |
+| POST | `/estoque/verificar` | `{ "itens": [ { "bebidaId": 1, "quantidade": 2 } ] }` | Quem precisar conferir vários itens de uma vez |
+| POST | `/estoque/baixar` | `{ "pedidoId": 1, "itens": [ ... ] }` | Serviço de Pedidos |
+| POST | `/estoque/restaurar` | `{ "pedidoId": 1 }` | Serviço de Pedidos |
+| POST | `/estoque/{bebidaId}/repor` | `{ "quantidade": 24 }` | Front |
+| PUT | `/estoque/{bebidaId}` | `{ "quantidade": 50, "quantidadeMinima": 10 }` (os dois são opcionais) | Front (ajuste de inventário) |
+
+Resposta de `GET /estoque/{bebidaId}`:
+```json
+{ "bebidaId": 1, "quantidade": 120, "quantidadeMinima": 24, "precisaRepor": false, "atualizadoEm": "2026-11-20T14:02:11" }
+```
+- Bebida sem estoque cadastrado (ex.: recém-criada no catálogo) responde 200 com `quantidade: 0`. A primeira reposição cria o registro.
+
+Resposta de `POST /estoque/verificar`:
+```json
+{ "disponivel": false, "itens": [ { "bebidaId": 12, "solicitado": 6, "emEstoque": 4, "disponivel": false } ] }
+```
+
+- `baixar` é tudo ou nada: se faltar qualquer item, responde 409 e não baixa nenhum. Chamar `baixar` duas vezes para o mesmo pedido também dá 409.
+- `restaurar` devolve só o que foi baixado para o pedido e pode ser chamado mais de uma vez sem duplicar (a segunda chamada devolve `itens: []`).
+- Toda baixa, restauração, reposição e ajuste fica registrada em `movimentacoes`.
+
+### Entregas
+
+| Método | Rota | Corpo | Quem usa |
+|---|---|---|---|
+| POST | `/entregas` | `{ "pedidoId": 1, "clienteId": 1, "endereco": "Rua A, 10" }` | Serviço de Pedidos. Retorna 201 |
+| GET | `/entregas?status=&entregadorId=` | | Front |
+| GET | `/entregas/{id}` | | Front |
+| GET | `/entregas/pedido/{pedidoId}` | | Front |
+| PATCH | `/entregas/{id}/atribuir` | `{ "entregadorId": 1 }` | Front |
+| PATCH | `/entregas/{id}/iniciar` | | Front (entregador saiu) |
+| PATCH | `/entregas/{id}/finalizar` | | Front (entregue) |
+| PATCH | `/entregas/{id}/falha` | `{ "motivo": "Cliente ausente" }` | Front |
+| PATCH | `/entregas/pedido/{pedidoId}/cancelar` | | Serviço de Pedidos |
+
+Status da entrega:
+
+```
+aguardando_entregador → atribuida → em_rota → entregue
+                                       ↓
+                                    falhou → atribuida (nova tentativa)
+```
+- `cancelada` só a partir de `aguardando_entregador`, `atribuida` ou `falhou`. Em rota ou entregue: 409.
+- Ao `iniciar` a primeira tentativa, o Entregas chama `PATCH /pedidos/{id}/status` com `em_entrega`. Ao `finalizar`, chama com `entregue`. Se o Pedidos recusar, a entrega não muda de status.
+- Pedido que já tem entrega: 409.
+
+### Entregadores
+
+| Método | Rota | Corpo |
+|---|---|---|
+| GET | `/entregadores?ativos=true` | |
+| GET | `/entregadores/{id}` | |
+| GET | `/entregadores/{id}/entregas` | |
+| POST | `/entregadores` | `{ "nome": "Carlos Souza", "telefone": "85999810021", "veiculo": "moto", "placa": "PMX1A23" }` |
+| PATCH | `/entregadores/{id}/status` | `{ "ativo": false }` |
+
+- `veiculo`: `moto`, `carro` ou `bicicleta`. Placa obrigatória para moto e carro.
+- Entregador inativo não recebe entregas. Não dá para desativar quem está com entrega em rota (409).
+
+---
+
 ## Padrões combinados
 
 - JSON com nomes em camelCase (`bebidaId`, `pedidoId`, `clienteId`).

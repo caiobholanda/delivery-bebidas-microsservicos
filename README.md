@@ -38,6 +38,9 @@ Sistema de delivery de bebidas dividido em microsserviços. Cada serviço tem se
 | Catálogo | https://catalogo-service-joao.onrender.com |
 | Pedidos | https://pedidos-service-caio.onrender.com |
 | Pagamento | https://pagamento-service-caio.onrender.com |
+| Estoque | https://estoque-service-vitor.onrender.com |
+| Entregas | https://entregas-service-vitor.onrender.com |
+| Front (estoque e entregas) | https://delivery-bebidas-front-vitor.onrender.com |
 
 ## Autenticação e Catálogo (João Gabriel)
 
@@ -93,3 +96,32 @@ O banco e as tabelas são criados automaticamente na primeira execução.
 | `DB_SSL` | `true` para bancos na nuvem que exigem SSL |
 | `CATALOGO_URL`, `ESTOQUE_URL`, `ENTREGAS_URL` | Endereços dos serviços dos colegas |
 | `PAGAMENTO_URL` / `PEDIDOS_URL` | Endereço do outro serviço do Caio |
+
+## Estoque e Entregas (Vitor)
+
+Requisitos: Python 3.11+ e MySQL 8. Os dois serviços usam FastAPI e SQLAlchemy.
+
+Para rodar localmente (faça o mesmo em `entregas-service`):
+
+```bash
+cd estoque-service
+python -m venv .venv
+.venv\Scripts\activate        # no Linux/Mac: source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+Abra o `.env` e troque `SUA_SENHA` pela senha do seu MySQL. Depois:
+
+```bash
+python main.py
+```
+
+O banco e as tabelas são criados automaticamente na primeira execução. O Estoque já vem com saldo para as 12 bebidas do catálogo (ids de 1 a 12) e o Entregas já vem com 3 entregadores. A documentação interativa das rotas fica em `/docs` (ex.: http://localhost:5001/docs).
+
+| Variável | Descrição |
+|---|---|
+| `DATABASE_URL` | `mysql+pymysql://usuario:senha@host:porta/banco` |
+| `PEDIDOS_URL` | Endereço do serviço de Pedidos (Entregas avisa quando o pedido sai e quando é entregue) |
+
+Rotas e exemplos: [Contratos entre os serviços](docs/CONTRATOS.md). A página `frontend-estoque-entregas/index.html` mostra o estoque, permite repor bebidas, atribuir entregadores e acompanhar as entregas.
