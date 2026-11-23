@@ -73,6 +73,10 @@
         <input type="number" id="trocoPara" placeholder="Troco para (R$)">
       </div>
       <button onclick="finalizarPedido()">Finalizar</button>
+    </section>
+
+    <section id="areaResultado" class="oculto">
+      <h2>Pagamento</h2>
       <div id="resultadoPagamento"></div>
     </section>
 
@@ -375,6 +379,7 @@
 
         const { pedido, pagamento } = await api(`${PEDIDOS_URL}/pedidos`, 'POST', corpo);
         const area = document.getElementById('resultadoPagamento');
+        document.getElementById('areaResultado').classList.remove('oculto');
         area.innerHTML = `<p>Pedido #${pedido.id} criado. Status: <b>${STATUS_PEDIDO[pedido.status]}</b></p>`;
 
         if (pagamento.metodo === 'pix') {
@@ -399,6 +404,7 @@
     function simularPix(pagamentoId) {
       executar(async () => {
         await api(`${PAGAMENTO_URL}/pagamentos/${pagamentoId}/confirmar`, 'POST');
+        document.getElementById('areaResultado').classList.remove('oculto');
         document.getElementById('resultadoPagamento').innerHTML = '<p>Pix confirmado. Pedido enviado para entrega.</p>';
         await carregarHistorico();
       }, 'Pagamento confirmado');
