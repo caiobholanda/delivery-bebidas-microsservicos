@@ -23,11 +23,14 @@ async function requisitar(url, metodo = 'GET', corpo) {
   try {
     dados = texto ? JSON.parse(texto) : null;
   } catch {
-    dados = { mensagem: texto };
+    if (!resposta.ok) {
+      throw erroHttp(503, `Serviço fora do ar ou endereço errado: ${new URL(url).origin}`);
+    }
+    throw erroHttp(502, `Resposta inválida de ${new URL(url).origin}`);
   }
 
   if (!resposta.ok) {
-    const mensagem = dados?.erro || dados?.mensagem || dados?.message || `Erro ao chamar ${url}`;
+    const mensagem = dados?.erro || dados?.mensagem || dados?.message || dados?.detail || `Erro ao chamar ${url}`;
     throw erroHttp(resposta.status, mensagem);
   }
   return dados;
