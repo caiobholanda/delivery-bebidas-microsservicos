@@ -1,9 +1,13 @@
 const { erroHttp } = require('./erros');
 
-const CATALOGO_URL = process.env.CATALOGO_URL;
-const ESTOQUE_URL = process.env.ESTOQUE_URL;
-const PAGAMENTO_URL = process.env.PAGAMENTO_URL;
-const ENTREGAS_URL = process.env.ENTREGAS_URL;
+function limparUrl(url) {
+  return (url || '').trim().replace(/\/+$/, '');
+}
+
+const CATALOGO_URL = limparUrl(process.env.CATALOGO_URL);
+const ESTOQUE_URL = limparUrl(process.env.ESTOQUE_URL);
+const PAGAMENTO_URL = limparUrl(process.env.PAGAMENTO_URL);
+const ENTREGAS_URL = limparUrl(process.env.ENTREGAS_URL);
 
 async function requisitar(url, metodo = 'GET', corpo) {
   let resposta;
@@ -31,6 +35,9 @@ async function requisitar(url, metodo = 'GET', corpo) {
 
   if (!resposta.ok) {
     const mensagem = dados?.erro || dados?.mensagem || dados?.message || dados?.detail || `Erro ao chamar ${url}`;
+    if (resposta.status === 404 && mensagem === 'Rota não encontrada') {
+      throw erroHttp(502, `Rota não encontrada em ${url}. Confira a URL do serviço no Environment do Render`);
+    }
     throw erroHttp(resposta.status, mensagem);
   }
   return dados;

@@ -235,6 +235,7 @@
     }
 
     async function carregarCarrinho() {
+      document.getElementById('itensCarrinho').innerHTML = '<tr><td colspan="5" class="vazio">Carregando carrinho...</td></tr>';
       mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId}`));
     }
 
@@ -265,14 +266,14 @@
     }
 
     async function carregarHistorico() {
-      const pedidos = await api(`${PEDIDOS_URL}/pedidos/cliente/${clienteId}`);
-      const entregas = await Promise.all(pedidos.map((pedido) => buscarEntrega(pedido.id)));
       const corpo = document.getElementById('historico');
+      corpo.innerHTML = '<tr><td colspan="7" class="vazio">Carregando pedidos...</td></tr>';
+      const pedidos = await api(`${PEDIDOS_URL}/pedidos/cliente/${clienteId}`);
       corpo.innerHTML = '';
       if (!pedidos.length) {
         corpo.innerHTML = '<tr><td colspan="7" class="vazio">Você ainda não fez pedidos.</td></tr>';
       }
-      pedidos.forEach((pedido, indice) => {
+      pedidos.forEach((pedido) => {
         const linha = document.createElement('tr');
         linha.innerHTML = `
           <td>${pedido.id}</td>
@@ -280,9 +281,13 @@
           <td>${dinheiro(pedido.total)}${pedido.cupom ? `<br><span class="detalhe">Cupom ${texto(pedido.cupom)}</span>` : ''}</td>
           <td>${FORMAS[pedido.formaPagamento] || pedido.formaPagamento}</td>
           <td>${STATUS_PEDIDO[pedido.status] || pedido.status}</td>
-          <td>${textoEntrega(pedido, entregas[indice])}</td>
+          <td id="entrega${pedido.id}"><span class="detalhe">Consultando...</span></td>
           <td>${acoesPedido(pedido)}</td>`;
         corpo.appendChild(linha);
+        buscarEntrega(pedido.id).then((entrega) => {
+          const celula = document.getElementById(`entrega${pedido.id}`);
+          if (celula) celula.innerHTML = textoEntrega(pedido, entrega);
+        });
       });
     }
 
@@ -311,10 +316,11 @@
     }
 
     function carregarTudo() {
-      executar(async () => {
-        await carregarCarrinho();
-        await carregarHistorico();
+      mostrarMensagem('Conectando aos serviços. Se estiverem parados, a primeira resposta pode levar até 1 minuto.', 'ok');
+      executar(carregarCarrinho).then(() => {
+        if (document.getElementById('mensagem').className === 'ok') document.getElementById('mensagem').className = '';
       });
+      executar(carregarHistorico);
     }
 
     function alterarQuantidade(bebidaId, quantidade) {
