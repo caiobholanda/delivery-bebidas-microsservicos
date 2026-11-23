@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delivery de Bebidas - Login e Catálogo</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 0 16px; background: #f4f6f8; color: #222; }
+    h1 { color: #1d4e89; }
+    section { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+    input, select, button { padding: 8px; margin: 4px 4px 4px 0; border: 1px solid #ccc; border-radius: 4px; }
+    button { background: #1d4e89; color: #fff; border: none; cursor: pointer; }
+    button.secundario { background: #888; }
+    button.perigo { background: #c0392b; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 6px; border-bottom: 1px solid #eee; }
+    .oculto { display: none; }
+    .antigo { text-decoration: line-through; color: #888; }
+    .promo { color: #2e7d32; font-weight: bold; }
+    #mensagem { padding: 10px; border-radius: 4px; display: none; }
+    #mensagem.erro { display: block; background: #fdecea; color: #c0392b; }
+    #mensagem.ok { display: block; background: #e8f5e9; color: #2e7d32; }
+  </style>
+</head>
+<body>
+  <h1>Delivery de Bebidas</h1>
+  <div id="mensagem"></div>
+
+  <section id="areaLogin">
+    <h2>Entrar</h2>
+    <input id="loginEmail" type="email" placeholder="E-mail">
+    <input id="loginSenha" type="password" placeholder="Senha">
+    <button onclick="entrar()">Entrar</button>
+
+    <h2>Criar conta</h2>
+    <input id="cadNome" placeholder="Nome">
+    <input id="cadEmail" type="email" placeholder="E-mail">
+    <input id="cadSenha" type="password" placeholder="Senha (mínimo 6)">
+    <label>Nascimento: <input id="cadNascimento" type="date"></label>
+    <button onclick="cadastrar()">Cadastrar</button>
+    <p><small>Cadastro permitido apenas para maiores de 18 anos.</small></p>
+  </section>
+
+  <section id="areaUsuario" class="oculto">
+    <p>Olá, <b id="usuarioNome"></b> (<span id="usuarioPerfil"></span>) | Cliente ID: <b id="usuarioId"></b></p>
+    <input id="senhaAtual" type="password" placeholder="Senha atual">
+    <input id="novaSenha" type="password" placeholder="Nova senha">
+    <button class="secundario" onclick="alterarSenha()">Alterar senha</button>
+    <button class="perigo" onclick="sair()">Sair</button>
+    <p><a id="linkPedidos" href="#" target="_blank">Ver carrinho e pedidos</a></p>
+  </section>
+
+  <section>
+    <h2>Catálogo</h2>
+    <input id="busca" placeholder="Buscar bebida">
+    <select id="categoria"><option value="">Todas as categorias</option></select>
+    <input type="number" id="precoMin" placeholder="Preço mín." min="0" step="0.01" style="width:100px">
+    <input type="number" id="precoMax" placeholder="Preço máx." min="0" step="0.01" style="width:100px">
+    <select id="ordem">
+      <option value="">Nome</option>
+      <option value="preco_asc">Menor preço</option>
+      <option value="preco_desc">Maior preço</option>
+    </select>
+    <button onclick="listarBebidas()">Buscar</button>
+    <button class="secundario" onclick="listarDestaques()">Destaques</button>
+    <button class="secundario" onclick="listarPromocoes()">Promoções</button>
+    <table>
+      <thead><tr><th>ID</th><th>Bebida</th><th>Categoria</th><th>Preço</th><th></th></tr></thead>
+      <tbody id="bebidas"></tbody>
+    </table>
+  </section>
+
+  <section id="areaAdmin" class="oculto">
+    <h2>Administrador: cadastrar ou editar bebida</h2>
+    <input type="number" id="admId" placeholder="ID (vazio para nova)" min="1" style="width:150px">
+    <input id="admNome" placeholder="Nome">
+    <input id="admCategoria" placeholder="Categoria">
+    <input id="admDescricao" placeholder="Descrição" size="30">
+    <input type="number" id="admPreco" placeholder="Preço" min="0" step="0.01" style="width:100px">
+    <input type="number" id="admPromo" placeholder="Promocional" min="0" step="0.01" style="width:110px">
+    <label><input type="checkbox" id="admDestaque"> Destaque</label>
+    <button onclick="salvarBebida()">Salvar</button>
+  </section>
+
+  <script>
+    const AUTENTICACAO_URL = 'https://autenticacao-service-joao.onrender.com';
+    const CATALOGO_URL = 'https://catalogo-service-joao.onrender.com';
+    const PEDIDOS_URL = 'https://pedidos-service-caio.onrender.com';
+    const FRONT_PEDIDOS_URL = 'https://delivery-bebidas-front.onrender.com';
+
+    let sessao = null;
+
+    function dinheiro(valor) {
+      return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function texto(valor) {
+      const div = document.createElement('div');
+      div.textContent = valor ?? '';
+      return div.innerHTML;
+    }
+
+    function mostrarMensagem(mensagem, tipo) {
+      const caixa = document.getElementById('mensagem');
+      caixa.textContent = mensagem;
+      caixa.className = tipo;
+    }
+
+    async function api(url, metodo = 'GET', corpo) {
+      const cabecalhos = { 'Content-Type': 'application/json' };
+      if (sessao) cabecalhos.Authorization = `Bearer ${sessao.token}`;
+      const resposta = await fetch(url, {
+        method: metodo,
+        headers: cabecalhos,
+        body: corpo ? JSON.stringify(corpo) : undefined
+      });
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(dados.erro || 'Erro na requisição');
+      return dados;
+    }
+
+    async function executar(acao) {
+      try {
+        await acao();
+      } catch (erro) {
+        mostrarMensagem(erro.message, 'erro');
+      }
+    }
+
+    function guardarSessao() {
+      try {
+        if (sessao) sessionStorage.setItem('sessao', JSON.stringify(sessao));
+        else sessionStorage.removeItem('sessao');
+      } catch (e) { /* sem armazenamento: a sessão vale só enquanto a página estiver aberta */ }
+    }
+
+    function atualizarTela() {
+      const logado = sessao !== null;
+      document.getElementById('areaLogin').classList.toggle('oculto', logado);
+      document.getElementById('areaUsuario').classList.toggle('oculto', !logado);
+      document.getElementById('areaAdmin').classList.toggle('oculto', !(logado && sessao.usuario.perfil === 'administrador'));
+      if (logado) {
+        document.getElementById('usuarioNome').textContent = sessao.usuario.nome;
+        document.getElementById('usuarioPerfil').textContent = sessao.usuario.perfil;
+        document.getElementById('usuarioId').textContent = sessao.usuario.id;
+        document.getElementById('linkPedidos').href = FRONT_PEDIDOS_URL;
+      }
+      listarBebidas();
+    }
+
+    function entrar() {
+      executar(async () => {
+        sessao = await api(`${AUTENTICACAO_URL}/auth/login`, 'POST', {
+          email: document.getElementById('loginEmail').value,
+          senha: document.getElementById('loginSenha').value
+        });
+        guardarSessao();
+        mostrarMensagem(`Bem-vindo, ${sessao.usuario.nome}!`, 'ok');
+        atualizarTela();
+      });
+    }
+
+    function cadastrar() {
+      executar(async () => {
+        const usuario = await api(`${AUTENTICACAO_URL}/auth/cadastro`, 'POST', {
+          nome: document.getElementById('cadNome').value,
+          email: document.getElementById('cadEmail').value,
+          senha: document.getElementById('cadSenha').value,
+          dataNascimento: document.getElementById('cadNascimento').value
+        });
+        mostrarMensagem(`Conta criada. Seu ID de cliente é ${usuario.id}. Agora é só entrar.`, 'ok');
+      });
+    }
+
+    function alterarSenha() {
+      executar(async () => {
+        const resposta = await api(`${AUTENTICACAO_URL}/auth/senha`, 'PUT', {
+          senhaAtual: document.getElementById('senhaAtual').value,
+          novaSenha: document.getElementById('novaSenha').value
+        });
+        sessao = null;
+        guardarSessao();
+        atualizarTela();
+        mostrarMensagem(resposta.mensagem, 'ok');
+      });
+    }
+
+    function sair() {
+      sessao = null;
+      guardarSessao();
+      mostrarMensagem('Você saiu da conta.', 'ok');
+      atualizarTela();
+    }
+
+    function mostrarBebidas(bebidas) {
+      const corpo = document.getElementById('bebidas');
+      corpo.innerHTML = '';
+      if (!bebidas.length) {
+        corpo.innerHTML = '<tr><td colspan="5">Nenhuma bebida encontrada.</td></tr>';
+        return;
+      }
+      bebidas.forEach((bebida) => {
+        const preco = bebida.precoPromocional
+          ? `<span class="antigo">${dinheiro(bebida.preco)}</span> <span class="promo">${dinheiro(bebida.precoPromocional)}</span>`
+          : dinheiro(bebida.preco);
+        const linha = document.createElement('tr');
+        linha.innerHTML = `
+          <td>${bebida.id}</td>
+          <td>${texto(bebida.nome)}${bebida.destaque ? ' ⭐' : ''}<br><small>${texto(bebida.descricao)}</small></td>
+          <td>${texto(bebida.categoria)}</td>
+          <td>${preco}</td>
+          <td>
+            <input type="number" id="qtd${bebida.id}" value="1" min="1" style="width:55px">
+            <button onclick="adicionarAoCarrinho(${bebida.id})">Adicionar</button>
+            ${sessao && sessao.usuario.perfil === 'administrador' ? `<button class="secundario" onclick="editarBebida(${bebida.id})">Editar</button>` : ''}
+          </td>`;
+        corpo.appendChild(linha);
+      });
+    }
+
+    function listarBebidas() {
+      executar(async () => {
+        const filtros = new URLSearchParams();
+        [['busca', 'busca'], ['categoria', 'categoria'], ['precoMin', 'precoMin'], ['precoMax', 'precoMax'], ['ordem', 'ordem']]
+          .forEach(([campo, id]) => {
+            const valor = document.getElementById(id).value;
+            if (valor) filtros.set(campo, valor);
+          });
+        mostrarBebidas(await api(`${CATALOGO_URL}/bebidas?${filtros}`));
+        carregarCategorias();
+      });
+    }
+
+    function listarDestaques() {
+      executar(async () => mostrarBebidas(await api(`${CATALOGO_URL}/bebidas/destaques`)));
+    }
+
+    function listarPromocoes() {
+      executar(async () => mostrarBebidas(await api(`${CATALOGO_URL}/bebidas/promocoes`)));
+    }
+
+    async function carregarCategorias() {
+      const select = document.getElementById('categoria');
+      if (select.options.length > 1) return;
+      const categorias = await api(`${CATALOGO_URL}/categorias`).catch(() => []);
+      categorias.forEach((nome) => select.add(new Option(nome, nome)));
+    }
+
+    function adicionarAoCarrinho(bebidaId) {
+      executar(async () => {
+        if (!sessao) throw new Error('Entre na sua conta para adicionar ao carrinho');
+        const quantidade = Number(document.getElementById(`qtd${bebidaId}`).value);
+        await api(`${PEDIDOS_URL}/carrinho/${sessao.usuario.id}/itens`, 'POST', { bebidaId, quantidade });
+        mostrarMensagem('Bebida adicionada ao carrinho. Abra "Ver carrinho e pedidos" para finalizar.', 'ok');
+      });
+    }
+
+    function editarBebida(id) {
+      executar(async () => {
+        const bebida = await api(`${CATALOGO_URL}/bebidas/${id}`);
+        document.getElementById('admId').value = bebida.id;
+        document.getElementById('admNome').value = bebida.nome;
+        document.getElementById('admCategoria').value = bebida.categoria;
+        document.getElementById('admDescricao').value = bebida.descricao || '';
+        document.getElementById('admPreco').value = bebida.preco;
+        document.getElementById('admPromo').value = bebida.precoPromocional || '';
+        document.getElementById('admDestaque').checked = bebida.destaque;
+        document.getElementById('areaAdmin').scrollIntoView();
+      });
+    }
+
+    function salvarBebida() {
+      executar(async () => {
+        const id = document.getElementById('admId').value;
+        const promo = document.getElementById('admPromo').value;
+        const corpo = {
+          nome: document.getElementById('admNome').value,
+          categoria: document.getElementById('admCategoria').value,
+          descricao: document.getElementById('admDescricao').value,
+          preco: Number(document.getElementById('admPreco').value),
+          precoPromocional: promo ? Number(promo) : null,
+          destaque: document.getElementById('admDestaque').checked
+        };
+        const bebida = id
+          ? await api(`${CATALOGO_URL}/bebidas/${id}`, 'PUT', corpo)
+          : await api(`${CATALOGO_URL}/bebidas`, 'POST', corpo);
+        mostrarMensagem(`Bebida salva (ID ${bebida.id}).`, 'ok');
+        ['admId', 'admNome', 'admCategoria', 'admDescricao', 'admPreco', 'admPromo'].forEach((campo) => {
+          document.getElementById(campo).value = '';
+        });
+        document.getElementById('admDestaque').checked = false;
+        document.getElementById('categoria').length = 1;
+        listarBebidas();
+      });
+    }
+
+    try {
+      const guardada = sessionStorage.getItem('sessao');
+      if (guardada) sessao = JSON.parse(guardada);
+    } catch (e) { sessao = null; }
+    atualizarTela();
+  </script>
+</body>
+</html>
