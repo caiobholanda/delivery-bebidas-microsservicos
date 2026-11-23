@@ -27,6 +27,7 @@ Sistema de delivery de bebidas dividido em microsserviços. Cada serviço tem se
 
 - [Deploy na nuvem (TiDB + Render)](docs/DEPLOY.md)
 - [Contratos entre os serviços](docs/CONTRATOS.md)
+- [Fluxo das telas](docs/FLUXO_TELAS.md)
 
 ## Links
 

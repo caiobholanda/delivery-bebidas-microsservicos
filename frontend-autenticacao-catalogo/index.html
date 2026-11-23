@@ -20,10 +20,15 @@
     #mensagem { padding: 10px; border-radius: 4px; display: none; }
     #mensagem.erro { display: block; background: #fdecea; color: #c0392b; }
     #mensagem.ok { display: block; background: #e8f5e9; color: #2e7d32; }
+    nav#menu { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; background: #fff; padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+    a.botao { display: inline-block; padding: 8px 14px; margin: 2px 6px 2px 0; background: #e8eef6; color: #1d4e89; border-radius: 4px; text-decoration: none; }
+    a.botao.atual { background: #1d4e89; color: #fff; }
+    .usuario { margin-right: 8px; }
   </style>
 </head>
 <body>
   <h1>Delivery de Bebidas</h1>
+  <nav id="menu"></nav>
   <div id="mensagem"></div>
 
   <section id="areaLogin">
@@ -47,7 +52,7 @@
     <input id="novaSenha" type="password" placeholder="Nova senha">
     <button class="secundario" onclick="alterarSenha()">Alterar senha</button>
     <button class="perigo" onclick="sair()">Sair</button>
-    <p><a id="linkPedidos" href="#" target="_blank">Ver carrinho e pedidos</a></p>
+    <p><a class="botao atual" id="linkPedidos" href="#">Ir para o carrinho</a></p>
   </section>
 
   <section>
@@ -86,9 +91,73 @@
     const AUTENTICACAO_URL = 'https://autenticacao-service-joao.onrender.com';
     const CATALOGO_URL = 'https://catalogo-service-joao.onrender.com';
     const PEDIDOS_URL = 'https://pedidos-service-caio.onrender.com';
-    const FRONT_PEDIDOS_URL = 'https://delivery-bebidas-front.onrender.com';
 
     let sessao = null;
+
+    const TELAS = {
+      catalogo: 'https://delivery-bebidas-front-joao.onrender.com',
+      pedidos: 'https://delivery-bebidas-front.onrender.com',
+      operacao: 'https://delivery-bebidas-front-vitor.onrender.com'
+    };
+
+    function lerSessao() {
+      try {
+        const hash = window.location.hash;
+        if (hash === '#sair') {
+          sessionStorage.removeItem('sessao');
+          history.replaceState(null, '', window.location.pathname + window.location.search);
+        } else if (hash.startsWith('#sessao=')) {
+          sessionStorage.setItem('sessao', decodeURIComponent(hash.slice(8)));
+          history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+        const guardada = sessionStorage.getItem('sessao');
+        return guardada ? JSON.parse(guardada) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function linkTela(tela) {
+      return sessao ? `${TELAS[tela]}#sessao=${encodeURIComponent(JSON.stringify(sessao))}` : `${TELAS[tela]}#sair`;
+    }
+
+    function podeOperar() {
+      return sessao && ['administrador', 'entregador'].includes(sessao.usuario.perfil);
+    }
+
+    function sairDeTodas() {
+      try { sessionStorage.removeItem('sessao'); } catch (e) { }
+      if (window.location.origin === new URL(TELAS.catalogo).origin) {
+        window.location.hash = '';
+        window.location.reload();
+      } else {
+        window.location.href = `${TELAS.catalogo}#sair`;
+      }
+    }
+
+    function montarMenu(atual, quantidadeCarrinho) {
+      const itens = [
+        ['catalogo', 'Catálogo'],
+        ['pedidos', quantidadeCarrinho ? `Carrinho e pedidos (${quantidadeCarrinho})` : 'Carrinho e pedidos']
+      ];
+      if (podeOperar()) itens.push(['operacao', 'Estoque e entregas']);
+      const links = itens
+        .map(([tela, nome]) => `<a class="botao${tela === atual ? ' atual' : ''}" href="${linkTela(tela)}">${nome}</a>`)
+        .join('');
+      const usuario = sessao
+        ? `<span class="usuario">Olá, <b>${texto(sessao.usuario.nome)}</b></span><button class="perigo" onclick="sairDeTodas()">Sair</button>`
+        : `<a class="botao" href="${TELAS.catalogo}">Entrar</a>`;
+      document.getElementById('menu').innerHTML = `<div>${links}</div><div>${usuario}</div>`;
+    }
+
+    async function atualizarMenu() {
+      montarMenu('catalogo');
+      if (!sessao) return;
+      try {
+        const carrinho = await api(`${PEDIDOS_URL}/carrinho/${sessao.usuario.id}`);
+        montarMenu('catalogo', carrinho.itens.reduce((soma, item) => soma + item.quantidade, 0));
+      } catch (e) { }
+    }
 
     function dinheiro(valor) {
       return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -143,8 +212,9 @@
         document.getElementById('usuarioNome').textContent = sessao.usuario.nome;
         document.getElementById('usuarioPerfil').textContent = sessao.usuario.perfil;
         document.getElementById('usuarioId').textContent = sessao.usuario.id;
-        document.getElementById('linkPedidos').href = FRONT_PEDIDOS_URL;
+        document.getElementById('linkPedidos').href = linkTela('pedidos');
       }
+      atualizarMenu();
       listarBebidas();
     }
 
@@ -251,7 +321,8 @@
         if (!sessao) throw new Error('Entre na sua conta para adicionar ao carrinho');
         const quantidade = Number(document.getElementById(`qtd${bebidaId}`).value);
         await api(`${PEDIDOS_URL}/carrinho/${sessao.usuario.id}/itens`, 'POST', { bebidaId, quantidade });
-        mostrarMensagem('Bebida adicionada ao carrinho. Abra "Ver carrinho e pedidos" para finalizar.', 'ok');
+        mostrarMensagem('Bebida adicionada ao carrinho. Clique em "Carrinho e pedidos" para finalizar.', 'ok');
+        atualizarMenu();
       });
     }
 
@@ -294,10 +365,7 @@
       });
     }
 
-    try {
-      const guardada = sessionStorage.getItem('sessao');
-      if (guardada) sessao = JSON.parse(guardada);
-    } catch (e) { sessao = null; }
+    sessao = lerSessao();
     atualizarTela();
   </script>
 </body>

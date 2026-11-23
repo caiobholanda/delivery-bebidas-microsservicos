@@ -7,7 +7,7 @@ const { validarCartao } = require('../cartao');
 const router = express.Router();
 
 const METODOS = ['pix', 'cartao', 'dinheiro'];
-const PEDIDOS_URL = process.env.PEDIDOS_URL;
+const PEDIDOS_URL = (process.env.PEDIDOS_URL || '').trim().replace(/\/+$/, '');
 
 function formatarPagamento(pagamento) {
   return {

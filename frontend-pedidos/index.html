@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Delivery de Bebidas - Pedidos</title>
+  <title>Delivery de Bebidas - Carrinho e Pedidos</title>
   <style>
     body { font-family: Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 0 16px; background: #f4f6f8; color: #222; }
     h1 { color: #1d4e89; }
@@ -12,95 +12,177 @@
     button { background: #1d4e89; color: #fff; border: none; cursor: pointer; }
     button.secundario { background: #888; }
     button.perigo { background: #c0392b; }
+    button.sucesso { background: #2e7d32; }
     table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 6px; border-bottom: 1px solid #eee; }
+    th, td { text-align: left; padding: 6px; border-bottom: 1px solid #eee; vertical-align: top; }
     .oculto { display: none; }
+    .vazio { color: #666; }
+    .detalhe { color: #666; font-size: 12px; }
+    .pix { font-family: monospace; word-break: break-all; background: #eef; padding: 8px; }
     #mensagem { padding: 10px; border-radius: 4px; display: none; }
     #mensagem.erro { display: block; background: #fdecea; color: #c0392b; }
     #mensagem.ok { display: block; background: #e8f5e9; color: #2e7d32; }
-    nav { margin-bottom: 16px; }
-    a.botao { display: inline-block; padding: 8px 14px; margin-right: 6px; background: #1d4e89; color: #fff; border-radius: 4px; text-decoration: none; }
-    .pix { font-family: monospace; word-break: break-all; background: #eef; padding: 8px; }
+    nav#menu { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; background: #fff; padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+    a.botao { display: inline-block; padding: 8px 14px; margin: 2px 6px 2px 0; background: #e8eef6; color: #1d4e89; border-radius: 4px; text-decoration: none; }
+    a.botao.atual { background: #1d4e89; color: #fff; }
+    .usuario { margin-right: 8px; }
   </style>
 </head>
 <body>
   <h1>Delivery de Bebidas</h1>
-  <nav>
-    <a class="botao" href="https://delivery-bebidas-front-joao.onrender.com">Início</a>
-    <a class="botao" href="https://delivery-bebidas-front-vitor.onrender.com">Estoque e entregas</a>
-  </nav>
+  <nav id="menu"></nav>
   <div id="mensagem"></div>
 
-  <section>
-    <label>Cliente ID: <input type="number" id="clienteId" value="1" min="1"></label>
-    <button onclick="carregarTudo()">Carregar</button>
+  <section id="semLogin" class="oculto">
+    <h2>Entre na sua conta</h2>
+    <p>Para ver o carrinho e os pedidos, entre pela tela do catálogo.</p>
+    <a class="botao atual" id="linkEntrar" href="#">Ir para o login</a>
   </section>
 
-  <section>
-    <h2>Adicionar ao carrinho</h2>
-    <input type="number" id="bebidaId" placeholder="ID da bebida" min="1">
-    <input type="number" id="quantidade" placeholder="Quantidade" value="1" min="1">
-    <button onclick="adicionarItem()">Adicionar</button>
-  </section>
+  <div id="conteudo" class="oculto">
+    <section>
+      <h2>Carrinho</h2>
+      <table>
+        <thead><tr><th>Bebida</th><th>Preço</th><th>Qtd</th><th>Total</th><th></th></tr></thead>
+        <tbody id="itensCarrinho"></tbody>
+      </table>
+      <p>
+        <input id="cupom" placeholder="Cupom">
+        <button onclick="aplicarCupom()">Aplicar cupom</button>
+        <button class="secundario" onclick="removerCupom()">Remover cupom</button>
+      </p>
+      <p id="resumo"></p>
+      <a class="botao" id="linkContinuar" href="#">Continuar comprando</a>
+    </section>
 
-  <section>
-    <h2>Carrinho</h2>
-    <table>
-      <thead><tr><th>Bebida</th><th>Preço</th><th>Qtd</th><th>Total</th><th></th></tr></thead>
-      <tbody id="itensCarrinho"></tbody>
-    </table>
-    <p>
-      <input id="cupom" placeholder="Cupom">
-      <button onclick="aplicarCupom()">Aplicar cupom</button>
-      <button class="secundario" onclick="removerCupom()">Remover cupom</button>
-    </p>
-    <p id="resumo"></p>
-  </section>
+    <section id="areaFinalizar">
+      <h2>Finalizar pedido</h2>
+      <input id="endereco" placeholder="Endereço de entrega" size="50">
+      <select id="formaPagamento" onchange="mostrarCampos()">
+        <option value="pix">Pix</option>
+        <option value="cartao">Cartão</option>
+        <option value="dinheiro">Dinheiro</option>
+      </select>
+      <div id="camposCartao" class="oculto">
+        <input id="cartaoNumero" placeholder="Número do cartão">
+        <input id="cartaoNome" placeholder="Nome no cartão">
+        <input id="cartaoValidade" placeholder="MM/AA" size="6">
+        <input id="cartaoCvv" placeholder="CVV" size="4">
+      </div>
+      <div id="camposDinheiro" class="oculto">
+        <input type="number" id="trocoPara" placeholder="Troco para (R$)">
+      </div>
+      <button onclick="finalizarPedido()">Finalizar</button>
+      <div id="resultadoPagamento"></div>
+    </section>
 
-  <section>
-    <h2>Finalizar pedido</h2>
-    <input id="endereco" placeholder="Endereço de entrega" size="50">
-    <select id="formaPagamento" onchange="mostrarCampos()">
-      <option value="pix">Pix</option>
-      <option value="cartao">Cartão</option>
-      <option value="dinheiro">Dinheiro</option>
-    </select>
-    <div id="camposCartao" class="oculto">
-      <input id="cartaoNumero" placeholder="Número do cartão">
-      <input id="cartaoNome" placeholder="Nome no cartão">
-      <input id="cartaoValidade" placeholder="MM/AA" size="6">
-      <input id="cartaoCvv" placeholder="CVV" size="4">
-    </div>
-    <div id="camposDinheiro" class="oculto">
-      <input type="number" id="trocoPara" placeholder="Troco para (R$)">
-    </div>
-    <button onclick="finalizarPedido()">Finalizar</button>
-    <div id="resultadoPagamento"></div>
-  </section>
-
-  <section>
-    <h2>Meus pedidos</h2>
-    <table>
-      <thead><tr><th>#</th><th>Data</th><th>Status</th><th>Pagamento</th><th>Total</th><th></th></tr></thead>
-      <tbody id="historico"></tbody>
-    </table>
-  </section>
+    <section>
+      <h2>Meus pedidos</h2>
+      <button class="secundario" onclick="executar(carregarHistorico)">Atualizar</button>
+      <table>
+        <thead><tr><th>#</th><th>Data</th><th>Total</th><th>Pagamento</th><th>Pedido</th><th>Entrega</th><th></th></tr></thead>
+        <tbody id="historico"></tbody>
+      </table>
+      <div id="detalhePedido"></div>
+    </section>
+  </div>
 
   <script>
     const PEDIDOS_URL = 'https://pedidos-service-caio.onrender.com';
     const PAGAMENTO_URL = 'https://pagamento-service-caio.onrender.com';
+    const ENTREGAS_URL = 'https://entregas-service-vitor.onrender.com';
 
-    function clienteId() {
-      return document.getElementById('clienteId').value;
+    const TELAS = {
+      catalogo: 'https://delivery-bebidas-front-joao.onrender.com',
+      pedidos: 'https://delivery-bebidas-front.onrender.com',
+      operacao: 'https://delivery-bebidas-front-vitor.onrender.com'
+    };
+
+    const STATUS_PEDIDO = {
+      aguardando_pagamento: 'Aguardando pagamento',
+      confirmado: 'Confirmado',
+      em_entrega: 'Em entrega',
+      entregue: 'Entregue',
+      cancelado: 'Cancelado'
+    };
+
+    const STATUS_ENTREGA = {
+      aguardando_entregador: 'Aguardando entregador',
+      atribuida: 'Entregador definido',
+      em_rota: 'Saiu para entrega',
+      entregue: 'Entregue',
+      falhou: 'Falhou',
+      cancelada: 'Cancelada'
+    };
+
+    const FORMAS = { pix: 'Pix', cartao: 'Cartão', dinheiro: 'Dinheiro' };
+
+    let sessao = lerSessao();
+    let clienteId = null;
+
+    function texto(valor) {
+      const div = document.createElement('div');
+      div.textContent = valor ?? '';
+      return div.innerHTML;
+    }
+
+    function lerSessao() {
+      try {
+        const hash = window.location.hash;
+        if (hash === '#sair') {
+          sessionStorage.removeItem('sessao');
+          history.replaceState(null, '', window.location.pathname + window.location.search);
+        } else if (hash.startsWith('#sessao=')) {
+          sessionStorage.setItem('sessao', decodeURIComponent(hash.slice(8)));
+          history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+        const guardada = sessionStorage.getItem('sessao');
+        return guardada ? JSON.parse(guardada) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function linkTela(tela) {
+      return sessao ? `${TELAS[tela]}#sessao=${encodeURIComponent(JSON.stringify(sessao))}` : `${TELAS[tela]}#sair`;
+    }
+
+    function podeOperar() {
+      return sessao && ['administrador', 'entregador'].includes(sessao.usuario.perfil);
+    }
+
+    function sairDeTodas() {
+      try { sessionStorage.removeItem('sessao'); } catch (e) { }
+      if (window.location.origin === new URL(TELAS.catalogo).origin) {
+        window.location.hash = '';
+        window.location.reload();
+      } else {
+        window.location.href = `${TELAS.catalogo}#sair`;
+      }
+    }
+
+    function montarMenu(atual, quantidadeCarrinho) {
+      const itens = [
+        ['catalogo', 'Catálogo'],
+        ['pedidos', quantidadeCarrinho ? `Carrinho e pedidos (${quantidadeCarrinho})` : 'Carrinho e pedidos']
+      ];
+      if (podeOperar()) itens.push(['operacao', 'Estoque e entregas']);
+      const links = itens
+        .map(([tela, nome]) => `<a class="botao${tela === atual ? ' atual' : ''}" href="${linkTela(tela)}">${nome}</a>`)
+        .join('');
+      const usuario = sessao
+        ? `<span class="usuario">Olá, <b>${texto(sessao.usuario.nome)}</b></span><button class="perigo" onclick="sairDeTodas()">Sair</button>`
+        : `<a class="botao" href="${TELAS.catalogo}">Entrar</a>`;
+      document.getElementById('menu').innerHTML = `<div>${links}</div><div>${usuario}</div>`;
     }
 
     function dinheiro(valor) {
       return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
 
-    function mostrarMensagem(texto, tipo) {
+    function mostrarMensagem(mensagem, tipo) {
       const caixa = document.getElementById('mensagem');
-      caixa.textContent = texto;
+      caixa.textContent = mensagem;
       caixa.className = tipo;
     }
 
@@ -115,49 +197,6 @@
       return dados;
     }
 
-    function mostrarCarrinho(carrinho) {
-      const corpo = document.getElementById('itensCarrinho');
-      corpo.innerHTML = '';
-      carrinho.itens.forEach((item) => {
-        const linha = document.createElement('tr');
-        linha.innerHTML = `
-          <td>${item.nome}</td>
-          <td>${dinheiro(item.precoUnitario)}</td>
-          <td><input type="number" min="0" value="${item.quantidade}" style="width:60px"
-                onchange="alterarQuantidade(${item.bebidaId}, this.value)"></td>
-          <td>${dinheiro(item.total)}</td>
-          <td><button class="perigo" onclick="removerItem(${item.bebidaId})">Remover</button></td>`;
-        corpo.appendChild(linha);
-      });
-
-      let resumo = `Subtotal: ${dinheiro(carrinho.subtotal)} | Desconto: ${dinheiro(carrinho.desconto)} | <b>Total: ${dinheiro(carrinho.total)}</b>`;
-      if (carrinho.cupom) resumo += ` | Cupom: ${carrinho.cupom}`;
-      if (carrinho.cupomAviso) resumo += ` <span style="color:#c0392b">(${carrinho.cupomAviso})</span>`;
-      document.getElementById('resumo').innerHTML = resumo;
-    }
-
-    async function carregarCarrinho() {
-      mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId()}`));
-    }
-
-    async function carregarHistorico() {
-      const pedidos = await api(`${PEDIDOS_URL}/pedidos/cliente/${clienteId()}`);
-      const corpo = document.getElementById('historico');
-      corpo.innerHTML = '';
-      pedidos.forEach((pedido) => {
-        const podeCancelar = ['aguardando_pagamento', 'confirmado'].includes(pedido.status);
-        const linha = document.createElement('tr');
-        linha.innerHTML = `
-          <td>${pedido.id}</td>
-          <td>${new Date(pedido.criadoEm).toLocaleString('pt-BR')}</td>
-          <td>${pedido.status}</td>
-          <td>${pedido.formaPagamento}</td>
-          <td>${dinheiro(pedido.total)}</td>
-          <td>${podeCancelar ? `<button class="perigo" onclick="cancelarPedido(${pedido.id})">Cancelar</button>` : ''}</td>`;
-        corpo.appendChild(linha);
-      });
-    }
-
     async function executar(acao, sucesso) {
       try {
         await acao();
@@ -167,6 +206,110 @@
       }
     }
 
+    function mostrarCarrinho(carrinho) {
+      const quantidade = carrinho.itens.reduce((soma, item) => soma + item.quantidade, 0);
+      montarMenu('pedidos', quantidade);
+
+      const corpo = document.getElementById('itensCarrinho');
+      corpo.innerHTML = '';
+      if (!carrinho.itens.length) {
+        corpo.innerHTML = '<tr><td colspan="5" class="vazio">Seu carrinho está vazio. Escolha suas bebidas no catálogo.</td></tr>';
+      }
+      carrinho.itens.forEach((item) => {
+        const linha = document.createElement('tr');
+        linha.innerHTML = `
+          <td>${texto(item.nome)}</td>
+          <td>${dinheiro(item.precoUnitario)}</td>
+          <td><input type="number" min="0" value="${item.quantidade}" style="width:60px"
+                onchange="alterarQuantidade(${item.bebidaId}, this.value)"></td>
+          <td>${dinheiro(item.total)}</td>
+          <td><button class="perigo" onclick="removerItem(${item.bebidaId})">Remover</button></td>`;
+        corpo.appendChild(linha);
+      });
+
+      let resumo = `Subtotal: ${dinheiro(carrinho.subtotal)} | Desconto: ${dinheiro(carrinho.desconto)} | <b>Total: ${dinheiro(carrinho.total)}</b>`;
+      if (carrinho.cupom) resumo += ` | Cupom: ${texto(carrinho.cupom)}`;
+      if (carrinho.cupomAviso) resumo += ` <span style="color:#c0392b">(${texto(carrinho.cupomAviso)})</span>`;
+      document.getElementById('resumo').innerHTML = resumo;
+      document.getElementById('areaFinalizar').classList.toggle('oculto', !carrinho.itens.length);
+    }
+
+    async function carregarCarrinho() {
+      mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId}`));
+    }
+
+    async function buscarEntrega(pedidoId) {
+      try {
+        return await api(`${ENTREGAS_URL}/entregas/pedido/${pedidoId}`);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function textoEntrega(pedido, entrega) {
+      if (!entrega) return ['cancelado', 'aguardando_pagamento'].includes(pedido.status) ? '-' : 'Aguardando';
+      let descricao = STATUS_ENTREGA[entrega.status] || entrega.status;
+      if (entrega.entregadorNome) descricao += `<br><span class="detalhe">${texto(entrega.entregadorNome)}</span>`;
+      return descricao;
+    }
+
+    function acoesPedido(pedido) {
+      let acoes = `<button class="secundario" onclick="verDetalhes(${pedido.id})">Detalhes</button>`;
+      if (pedido.status === 'aguardando_pagamento' && pedido.formaPagamento === 'pix' && pedido.pagamentoId) {
+        acoes += `<button class="sucesso" onclick="simularPix(${pedido.pagamentoId})">Pagar Pix</button>`;
+      }
+      if (['aguardando_pagamento', 'confirmado'].includes(pedido.status)) {
+        acoes += `<button class="perigo" onclick="cancelarPedido(${pedido.id})">Cancelar</button>`;
+      }
+      return acoes;
+    }
+
+    async function carregarHistorico() {
+      const pedidos = await api(`${PEDIDOS_URL}/pedidos/cliente/${clienteId}`);
+      const entregas = await Promise.all(pedidos.map((pedido) => buscarEntrega(pedido.id)));
+      const corpo = document.getElementById('historico');
+      corpo.innerHTML = '';
+      if (!pedidos.length) {
+        corpo.innerHTML = '<tr><td colspan="7" class="vazio">Você ainda não fez pedidos.</td></tr>';
+      }
+      pedidos.forEach((pedido, indice) => {
+        const linha = document.createElement('tr');
+        linha.innerHTML = `
+          <td>${pedido.id}</td>
+          <td>${new Date(pedido.criadoEm).toLocaleString('pt-BR')}</td>
+          <td>${dinheiro(pedido.total)}${pedido.cupom ? `<br><span class="detalhe">Cupom ${texto(pedido.cupom)}</span>` : ''}</td>
+          <td>${FORMAS[pedido.formaPagamento] || pedido.formaPagamento}</td>
+          <td>${STATUS_PEDIDO[pedido.status] || pedido.status}</td>
+          <td>${textoEntrega(pedido, entregas[indice])}</td>
+          <td>${acoesPedido(pedido)}</td>`;
+        corpo.appendChild(linha);
+      });
+    }
+
+    function verDetalhes(id) {
+      executar(async () => {
+        const pedido = await api(`${PEDIDOS_URL}/pedidos/${id}`);
+        const pagamentos = await api(`${PAGAMENTO_URL}/pagamentos/pedido/${id}`).catch(() => []);
+        const itens = pedido.itens
+          .map((item) => `<li>${item.quantidade}x ${texto(item.nome)} - ${dinheiro(item.precoUnitario * item.quantidade)}</li>`)
+          .join('');
+        const pagamento = pagamentos[0];
+        let infoPagamento = '';
+        if (pagamento) {
+          infoPagamento = `<p>Pagamento: ${FORMAS[pagamento.metodo]} - ${texto(pagamento.status)}`;
+          if (pagamento.cartaoFinal) infoPagamento += ` (cartão ${texto(pagamento.cartaoBandeira)} final ${texto(pagamento.cartaoFinal)})`;
+          if (pagamento.troco) infoPagamento += ` (troco de ${dinheiro(pagamento.troco)})`;
+          infoPagamento += '</p>';
+        }
+        document.getElementById('detalhePedido').innerHTML = `
+          <h3>Pedido #${pedido.id}</h3>
+          <ul>${itens}</ul>
+          <p>Subtotal: ${dinheiro(pedido.subtotal)} | Desconto: ${dinheiro(pedido.desconto)} | <b>Total: ${dinheiro(pedido.total)}</b></p>
+          <p>Endereço: ${texto(pedido.endereco)}</p>
+          ${infoPagamento}`;
+      });
+    }
+
     function carregarTudo() {
       executar(async () => {
         await carregarCarrinho();
@@ -174,31 +317,21 @@
       });
     }
 
-    function adicionarItem() {
-      executar(async () => {
-        const carrinho = await api(`${PEDIDOS_URL}/carrinho/${clienteId()}/itens`, 'POST', {
-          bebidaId: Number(document.getElementById('bebidaId').value),
-          quantidade: Number(document.getElementById('quantidade').value)
-        });
-        mostrarCarrinho(carrinho);
-      }, 'Item adicionado');
-    }
-
     function alterarQuantidade(bebidaId, quantidade) {
       executar(async () => {
-        mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId()}/itens/${bebidaId}`, 'PUT', { quantidade: Number(quantidade) }));
+        mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId}/itens/${bebidaId}`, 'PUT', { quantidade: Number(quantidade) }));
       }, 'Quantidade atualizada');
     }
 
     function removerItem(bebidaId) {
       executar(async () => {
-        mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId()}/itens/${bebidaId}`, 'DELETE'));
+        mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId}/itens/${bebidaId}`, 'DELETE'));
       }, 'Item removido');
     }
 
     function aplicarCupom() {
       executar(async () => {
-        mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId()}/cupom`, 'POST', {
+        mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId}/cupom`, 'POST', {
           codigo: document.getElementById('cupom').value
         }));
       }, 'Cupom aplicado');
@@ -206,7 +339,7 @@
 
     function removerCupom() {
       executar(async () => {
-        mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId()}/cupom`, 'DELETE'));
+        mostrarCarrinho(await api(`${PEDIDOS_URL}/carrinho/${clienteId}/cupom`, 'DELETE'));
       }, 'Cupom removido');
     }
 
@@ -220,7 +353,7 @@
       executar(async () => {
         const forma = document.getElementById('formaPagamento').value;
         const corpo = {
-          clienteId: Number(clienteId()),
+          clienteId: Number(clienteId),
           endereco: document.getElementById('endereco').value,
           formaPagamento: forma
         };
@@ -236,20 +369,21 @@
 
         const { pedido, pagamento } = await api(`${PEDIDOS_URL}/pedidos`, 'POST', corpo);
         const area = document.getElementById('resultadoPagamento');
-        area.innerHTML = `<p>Pedido #${pedido.id} criado. Status: <b>${pedido.status}</b></p>`;
+        area.innerHTML = `<p>Pedido #${pedido.id} criado. Status: <b>${STATUS_PEDIDO[pedido.status]}</b></p>`;
 
         if (pagamento.metodo === 'pix') {
           area.innerHTML += `
             <p>Pix copia e cola:</p>
-            <div class="pix">${pagamento.codigoPix}</div>
-            <button onclick="simularPix(${pagamento.id})">Simular pagamento do Pix</button>`;
+            <div class="pix">${texto(pagamento.codigoPix)}</div>
+            <button class="sucesso" onclick="simularPix(${pagamento.id})">Simular pagamento do Pix</button>`;
         }
         if (pagamento.metodo === 'cartao') {
-          area.innerHTML += `<p>Cartão ${pagamento.cartaoBandeira} final ${pagamento.cartaoFinal} aprovado.</p>`;
+          area.innerHTML += `<p>Cartão ${texto(pagamento.cartaoBandeira)} final ${texto(pagamento.cartaoFinal)} aprovado.</p>`;
         }
         if (pagamento.metodo === 'dinheiro' && pagamento.troco !== null) {
-          area.innerHTML += `<p>Levar troco de ${dinheiro(pagamento.troco)}.</p>`;
+          area.innerHTML += `<p>O entregador vai levar troco de ${dinheiro(pagamento.troco)}.</p>`;
         }
+        area.innerHTML += '<p>Acompanhe a entrega em "Meus pedidos".</p>';
 
         await carregarCarrinho();
         await carregarHistorico();
@@ -265,16 +399,29 @@
     }
 
     function cancelarPedido(id) {
+      if (!confirm(`Cancelar o pedido #${id}?`)) return;
       executar(async () => {
         await api(`${PEDIDOS_URL}/pedidos/${id}/cancelar`, 'PATCH');
         await carregarHistorico();
       }, `Pedido #${id} cancelado`);
     }
 
-    const parametros = new URLSearchParams(window.location.search);
-    if (parametros.get('clienteId')) document.getElementById('clienteId').value = parametros.get('clienteId');
+    function iniciar() {
+      const parametros = new URLSearchParams(window.location.search);
+      clienteId = sessao ? sessao.usuario.id : parametros.get('clienteId');
+      montarMenu('pedidos');
+      document.getElementById('linkEntrar').href = TELAS.catalogo;
+      document.getElementById('linkContinuar').href = linkTela('catalogo');
 
-    carregarTudo();
+      if (!clienteId) {
+        document.getElementById('semLogin').classList.remove('oculto');
+        return;
+      }
+      document.getElementById('conteudo').classList.remove('oculto');
+      carregarTudo();
+    }
+
+    iniciar();
   </script>
 </body>
 </html>
