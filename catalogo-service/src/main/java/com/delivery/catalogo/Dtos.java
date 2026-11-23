@@ -2,7 +2,6 @@ package com.delivery.catalogo;
 
 import java.math.BigDecimal;
 
-/** Corpos de entrada e saída da API. */
 public final class Dtos {
 
     private Dtos() {

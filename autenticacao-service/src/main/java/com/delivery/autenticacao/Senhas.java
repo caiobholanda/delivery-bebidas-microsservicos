@@ -10,7 +10,6 @@ import java.util.HexFormat;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 
-/** Hash de senha (PBKDF2) e geração de tokens, usando apenas o que vem no Java. */
 public final class Senhas {
 
     private static final SecureRandom ALEATORIO = new SecureRandom();

@@ -14,7 +14,6 @@ import com.delivery.catalogo.Dtos.Usuario;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/** Consome o serviço de Autenticação para saber quem está chamando o catálogo. */
 @Component
 public class AutenticacaoCliente {
 
@@ -26,7 +25,6 @@ public class AutenticacaoCliente {
         this.url = url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
     }
 
-    /** Exige um administrador logado. Lança 401 (sem login) ou 403 (não é administrador). */
     public Usuario exigirAdministrador(String cabecalho) {
         if (cabecalho == null || cabecalho.isBlank()) throw new ErroHttp(401, "Token não informado");
 

@@ -131,7 +131,7 @@
       try {
         if (sessao) sessionStorage.setItem('sessao', JSON.stringify(sessao));
         else sessionStorage.removeItem('sessao');
-      } catch (e) { /* sem armazenamento: a sessão vale só enquanto a página estiver aberta */ }
+      } catch (e) { }
     }
 
     function atualizarTela() {

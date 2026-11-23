@@ -5,7 +5,6 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
-/** Cria o administrador na primeira execução (quem cadastra bebidas no catálogo). */
 @Component
 public class AdministradorInicial implements ApplicationRunner {
 

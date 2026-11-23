@@ -45,7 +45,6 @@ public class AutenticacaoService {
         return criarUsuario(nome, email, senha, nascimento, "cliente");
     }
 
-    /** Usado na inicialização para garantir que exista ao menos um administrador. */
     public void criarAdministradorSeNaoExistir(String email, String senha) {
         if (repositorio.existePerfil("administrador")) return;
         criarUsuario("Administrador", email.toLowerCase(), senha, LocalDate.of(1990, 1, 1), "administrador");

@@ -1,6 +1,5 @@
 package com.delivery.autenticacao;
 
-/** Corpos de entrada e saída da API. */
 public final class Dtos {
 
     private Dtos() {
