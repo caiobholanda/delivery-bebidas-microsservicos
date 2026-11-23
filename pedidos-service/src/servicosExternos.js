@@ -9,28 +9,51 @@ const ESTOQUE_URL = limparUrl(process.env.ESTOQUE_URL);
 const PAGAMENTO_URL = limparUrl(process.env.PAGAMENTO_URL);
 const ENTREGAS_URL = limparUrl(process.env.ENTREGAS_URL);
 
-async function requisitar(url, metodo = 'GET', corpo) {
-  let resposta;
+const TENTATIVAS = 3;
+
+function esperar(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function chamar(url, metodo, corpo) {
   try {
-    resposta = await fetch(url, {
+    const resposta = await fetch(url, {
       method: metodo,
       headers: { 'Content-Type': 'application/json' },
       body: corpo ? JSON.stringify(corpo) : undefined,
       signal: AbortSignal.timeout(60000)
     });
+    const texto = await resposta.text();
+    try {
+      return { resposta, dados: texto ? JSON.parse(texto) : null, json: true };
+    } catch {
+      return { resposta, dados: null, json: false };
+    }
   } catch {
-    throw erroHttp(503, `Serviço indisponível: ${url}`);
+    return { resposta: null, dados: null, json: false };
+  }
+}
+
+function deveTentarDeNovo({ resposta, json }, metodo) {
+  if (!resposta) return metodo === 'GET';
+  return !json && [502, 503, 504].includes(resposta.status);
+}
+
+async function requisitar(url, metodo = 'GET', corpo) {
+  let resultado;
+  for (let tentativa = 1; tentativa <= TENTATIVAS; tentativa++) {
+    resultado = await chamar(url, metodo, corpo);
+    if (!deveTentarDeNovo(resultado, metodo) || tentativa === TENTATIVAS) break;
+    await esperar(3000 * tentativa);
   }
 
-  const texto = await resposta.text();
-  let dados = null;
-  try {
-    dados = texto ? JSON.parse(texto) : null;
-  } catch {
-    if (!resposta.ok) {
-      throw erroHttp(503, `Serviço fora do ar ou endereço errado: ${new URL(url).origin}`);
-    }
-    throw erroHttp(502, `Resposta inválida de ${new URL(url).origin}`);
+  const { resposta, dados, json } = resultado;
+  const origem = new URL(url).origin;
+
+  if (!resposta) throw erroHttp(503, `Serviço indisponível: ${origem}`);
+  if (!json) {
+    if (!resposta.ok) throw erroHttp(503, `Serviço fora do ar ou endereço errado: ${origem}`);
+    throw erroHttp(502, `Resposta inválida de ${origem}`);
   }
 
   if (!resposta.ok) {
