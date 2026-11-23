@@ -23,6 +23,10 @@
 </head>
 <body>
   <h1>Delivery de Bebidas</h1>
+  <p>
+    <a href="https://delivery-bebidas-front-joao.onrender.com">Catálogo</a> |
+    <a href="https://delivery-bebidas-front-vitor.onrender.com">Estoque e entregas</a>
+  </p>
   <div id="mensagem"></div>
 
   <section>
@@ -264,6 +268,9 @@
         await carregarHistorico();
       }, `Pedido #${id} cancelado`);
     }
+
+    const parametros = new URLSearchParams(window.location.search);
+    if (parametros.get('clienteId')) document.getElementById('clienteId').value = parametros.get('clienteId');
 
     carregarTudo();
   </script>
