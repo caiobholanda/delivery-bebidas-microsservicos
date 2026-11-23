@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS carrinhos (
   cliente_id INT NOT NULL UNIQUE,
   cupom_codigo VARCHAR(30) NULL,
   atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+) /*T![auto_id_cache] AUTO_ID_CACHE=1 */;
 
 CREATE TABLE IF NOT EXISTS itens_carrinho (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS itens_carrinho (
   quantidade INT NOT NULL,
   UNIQUE KEY uk_carrinho_bebida (carrinho_id, bebida_id),
   FOREIGN KEY (carrinho_id) REFERENCES carrinhos(id) ON DELETE CASCADE
-);
+) /*T![auto_id_cache] AUTO_ID_CACHE=1 */;
 
 CREATE TABLE IF NOT EXISTS cupons (
   codigo VARCHAR(30) PRIMARY KEY,
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS pedidos (
   criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_pedidos_cliente (cliente_id)
-);
+) /*T![auto_id_cache] AUTO_ID_CACHE=1 */;
 
 CREATE TABLE IF NOT EXISTS itens_pedido (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS itens_pedido (
   preco_unitario DECIMAL(10,2) NOT NULL,
   quantidade INT NOT NULL,
   FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE
-);
+) /*T![auto_id_cache] AUTO_ID_CACHE=1 */;
 
 INSERT IGNORE INTO cupons (codigo, tipo, valor, valor_minimo, validade, ativo) VALUES
   ('BEMVINDO10', 'percentual', 10, 0, NULL, TRUE),

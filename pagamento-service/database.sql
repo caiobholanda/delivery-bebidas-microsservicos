@@ -13,4 +13,4 @@ CREATE TABLE IF NOT EXISTS pagamentos (
   confirmado_em DATETIME NULL,
   estornado_em DATETIME NULL,
   INDEX idx_pagamentos_pedido (pedido_id)
-);
+) /*T![auto_id_cache] AUTO_ID_CACHE=1 */;
