@@ -24,21 +24,33 @@ function calcularDesconto(cupom, subtotal) {
 }
 
 async function obterCarrinhoId(clienteId) {
+  const [existentes] = await pool.query('SELECT id FROM carrinhos WHERE cliente_id = ?', [clienteId]);
+  if (existentes.length) return existentes[0].id;
   await pool.query('INSERT IGNORE INTO carrinhos (cliente_id) VALUES (?)', [clienteId]);
   const [linhas] = await pool.query('SELECT id FROM carrinhos WHERE cliente_id = ?', [clienteId]);
   return linhas[0].id;
 }
 
 async function montarCarrinho(clienteId) {
-  const carrinhoId = await obterCarrinhoId(clienteId);
-  const [[carrinho]] = await pool.query('SELECT * FROM carrinhos WHERE id = ?', [carrinhoId]);
-  const [itens] = await pool.query(
-    'SELECT bebida_id, nome, preco_unitario, quantidade FROM itens_carrinho WHERE carrinho_id = ? ORDER BY id',
-    [carrinhoId]
-  );
+  const [[carrinhos], [itens]] = await Promise.all([
+    pool.query(
+      `SELECT c.id, c.cupom_codigo, cp.codigo, cp.tipo, cp.valor, cp.valor_minimo, cp.validade, cp.ativo
+       FROM carrinhos c LEFT JOIN cupons cp ON cp.codigo = c.cupom_codigo
+       WHERE c.cliente_id = ?`,
+      [clienteId]
+    ),
+    pool.query(
+      `SELECT i.bebida_id, i.nome, i.preco_unitario, i.quantidade
+       FROM itens_carrinho i JOIN carrinhos c ON c.id = i.carrinho_id
+       WHERE c.cliente_id = ? ORDER BY i.id`,
+      [clienteId]
+    )
+  ]);
 
+  const carrinho = carrinhos[0] || { id: await obterCarrinhoId(clienteId), cupom_codigo: null };
+  const carrinhoId = carrinho.id;
   const subtotal = arredondar(itens.reduce((soma, item) => soma + item.preco_unitario * item.quantidade, 0));
-  const cupom = carrinho.cupom_codigo ? await buscarCupom(carrinho.cupom_codigo) : null;
+  const cupom = carrinho.cupom_codigo && carrinho.codigo ? carrinho : null;
   const desconto = calcularDesconto(cupom, subtotal);
 
   return {

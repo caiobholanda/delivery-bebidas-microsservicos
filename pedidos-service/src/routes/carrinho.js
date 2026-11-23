@@ -31,15 +31,19 @@ router.post('/:clienteId/itens', async (req, res) => {
   const qtd = idValido(quantidade);
   if (!id || !qtd) throw erroHttp(400, 'Informe bebidaId e quantidade maiores que zero');
 
-  const carrinhoId = await obterCarrinhoId(clienteId);
+  const [carrinhoId, bebida, disponivel] = await Promise.all([
+    obterCarrinhoId(clienteId),
+    buscarBebida(id),
+    consultarEstoque(id)
+  ]);
   const [existentes] = await pool.query(
     'SELECT quantidade FROM itens_carrinho WHERE carrinho_id = ? AND bebida_id = ?',
     [carrinhoId, id]
   );
   const novaQuantidade = (existentes[0]?.quantidade || 0) + qtd;
-
-  const bebida = await buscarBebida(id);
-  await garantirEstoque(id, novaQuantidade);
+  if (novaQuantidade > disponivel) {
+    throw erroHttp(409, `Estoque insuficiente. Disponível: ${disponivel}`);
+  }
 
   if (existentes.length) {
     await pool.query(

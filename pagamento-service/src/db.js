@@ -14,7 +14,11 @@ const pool = mysql.createPool({
   ssl,
   multipleStatements: true,
   decimalNumbers: true,
-  connectionLimit: 5
+  connectionLimit: 10,
+  maxIdle: 10,
+  idleTimeout: 300000,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10000
 });
 
 async function criarBancoSeNaoExistir() {

@@ -38,9 +38,11 @@ function formatarPedido(pedido, itens) {
 }
 
 async function buscarPedido(id) {
-  const [pedidos] = await pool.query('SELECT * FROM pedidos WHERE id = ?', [id]);
+  const [[pedidos], [itens]] = await Promise.all([
+    pool.query('SELECT * FROM pedidos WHERE id = ?', [id]),
+    pool.query('SELECT * FROM itens_pedido WHERE pedido_id = ?', [id])
+  ]);
   if (!pedidos.length) throw erroHttp(404, 'Pedido não encontrado');
-  const [itens] = await pool.query('SELECT * FROM itens_pedido WHERE pedido_id = ?', [id]);
   return { pedido: pedidos[0], itens };
 }
 
@@ -95,8 +97,10 @@ async function salvarPedido(clienteId, carrinho, formaPagamento, endereco) {
 }
 
 async function limparCarrinho(carrinhoId) {
-  await pool.query('DELETE FROM itens_carrinho WHERE carrinho_id = ?', [carrinhoId]);
-  await pool.query('UPDATE carrinhos SET cupom_codigo = NULL WHERE id = ?', [carrinhoId]);
+  await Promise.all([
+    pool.query('DELETE FROM itens_carrinho WHERE carrinho_id = ?', [carrinhoId]),
+    pool.query('UPDATE carrinhos SET cupom_codigo = NULL WHERE id = ?', [carrinhoId])
+  ]);
 }
 
 router.post('/', async (req, res) => {

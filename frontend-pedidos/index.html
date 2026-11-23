@@ -73,6 +73,10 @@
         <input type="number" id="trocoPara" placeholder="Troco para (R$)">
       </div>
       <button onclick="finalizarPedido()">Finalizar</button>
+    </section>
+
+    <section id="areaResultado" class="oculto">
+      <h2>Pagamento</h2>
       <div id="resultadoPagamento"></div>
     </section>
 
@@ -84,6 +88,17 @@
         <tbody id="historico"></tbody>
       </table>
       <div id="detalhePedido"></div>
+    </section>
+
+    <section id="areaBusca" class="oculto">
+      <h2>Buscar pedidos de um cliente</h2>
+      <input type="number" id="buscaClienteId" placeholder="ID do cliente" min="1" onkeydown="if (event.key === 'Enter') buscarPedidosCliente()">
+      <button onclick="buscarPedidosCliente()">Buscar</button>
+      <table>
+        <thead><tr><th>#</th><th>Data</th><th>Total</th><th>Pagamento</th><th>Pedido</th><th>Entrega</th><th></th></tr></thead>
+        <tbody id="resultadoBusca"><tr><td colspan="7" class="vazio">Digite o ID do cliente e clique em Buscar.</td></tr></tbody>
+      </table>
+      <div id="detalheBusca"></div>
     </section>
   </div>
 
@@ -155,23 +170,45 @@
     function acordarServicos() {
       const nomes = Object.keys(SERVICOS);
       const prontos = new Set();
-      let aviso = document.getElementById('avisoServicos');
-      if (!aviso) {
-        aviso = document.createElement('div');
-        aviso.id = 'avisoServicos';
-        aviso.style.cssText = 'background:#fff8e1;color:#8a6d00;padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:14px;';
-        document.getElementById('menu').insertAdjacentElement('afterend', aviso);
-      }
+      let fechado = false;
+
+      const fundo = document.createElement('div');
+      fundo.id = 'popupServicos';
+      fundo.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:1000;';
+      fundo.innerHTML = `
+        <div style="background:#fff;border-radius:10px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 24px rgba(0,0,0,.25);font-family:Arial,sans-serif;">
+          <h2 style="margin-top:0;color:#1d4e89;">Ligando o sistema</h2>
+          <p style="color:#444;">Os serviços ficam desligados quando ninguém usa e estão sendo ligados agora. Na primeira visita isso pode levar até 1 minuto.</p>
+          <div id="barraServicos" style="background:#e8eef6;border-radius:6px;height:10px;overflow:hidden;margin:12px 0;">
+            <div id="progressoServicos" style="background:#1d4e89;height:100%;width:0;transition:width .4s;"></div>
+          </div>
+          <ul id="listaServicos" style="list-style:none;padding:0;margin:0 0 16px;line-height:1.8;"></ul>
+          <button id="fecharPopupServicos" style="background:#888;color:#fff;border:none;border-radius:4px;padding:8px 14px;cursor:pointer;">Continuar mesmo assim</button>
+        </div>`;
+      document.body.appendChild(fundo);
+      document.getElementById('fecharPopupServicos').onclick = () => {
+        fechado = true;
+        fundo.style.display = 'none';
+      };
+
       const atualizar = () => {
-        const faltando = nomes.filter((nome) => !prontos.has(nome));
-        if (!faltando.length) {
-          aviso.style.display = 'none';
-          return;
+        document.getElementById('listaServicos').innerHTML = nomes
+          .map((nome) => prontos.has(nome)
+            ? `<li style="color:#2e7d32;">&#10004; ${nome}</li>`
+            : `<li style="color:#8a6d00;">&#8987; ${nome} (ligando...)</li>`)
+          .join('');
+        document.getElementById('progressoServicos').style.width = `${Math.round(prontos.size / nomes.length * 100)}%`;
+        if (prontos.size === nomes.length) {
+          fundo.style.display = 'none';
+          fechado = true;
         }
-        aviso.style.display = 'block';
-        aviso.textContent = `Ligando os serviços (${prontos.size} de ${nomes.length} prontos). Aguardando: ${faltando.join(', ')}. Na primeira visita isso pode levar até 1 minuto.`;
       };
       atualizar();
+
+      setTimeout(() => {
+        if (!fechado && prontos.size < nomes.length) fundo.style.display = 'flex';
+      }, 1500);
+
       nomes.forEach((nome) => {
         const tentar = (restantes) => {
           fetch(SERVICOS[nome], { cache: 'no-store' })
@@ -308,33 +345,50 @@
       return acoes;
     }
 
-    async function carregarHistorico() {
-      const corpo = document.getElementById('historico');
-      corpo.innerHTML = '<tr><td colspan="7" class="vazio">Carregando pedidos...</td></tr>';
-      const pedidos = await api(`${PEDIDOS_URL}/pedidos/cliente/${clienteId}`);
+    function mostrarPedidos(pedidos, idCorpo, comAcoes, mensagemVazia) {
+      const corpo = document.getElementById(idCorpo);
       corpo.innerHTML = '';
       if (!pedidos.length) {
-        corpo.innerHTML = '<tr><td colspan="7" class="vazio">Você ainda não fez pedidos.</td></tr>';
+        corpo.innerHTML = `<tr><td colspan="7" class="vazio">${mensagemVazia}</td></tr>`;
       }
       pedidos.forEach((pedido) => {
         const linha = document.createElement('tr');
+        const idCelula = `${idCorpo}Entrega${pedido.id}`;
         linha.innerHTML = `
           <td>${pedido.id}</td>
           <td>${new Date(pedido.criadoEm).toLocaleString('pt-BR')}</td>
           <td>${dinheiro(pedido.total)}${pedido.cupom ? `<br><span class="detalhe">Cupom ${texto(pedido.cupom)}</span>` : ''}</td>
           <td>${FORMAS[pedido.formaPagamento] || pedido.formaPagamento}</td>
           <td>${STATUS_PEDIDO[pedido.status] || pedido.status}</td>
-          <td id="entrega${pedido.id}"><span class="detalhe">Consultando...</span></td>
-          <td>${acoesPedido(pedido)}</td>`;
+          <td id="${idCelula}"><span class="detalhe">Consultando...</span></td>
+          <td>${comAcoes ? acoesPedido(pedido) : `<button class="secundario" onclick="verDetalhes(${pedido.id}, 'detalheBusca')">Detalhes</button>`}</td>`;
         corpo.appendChild(linha);
         buscarEntrega(pedido.id).then((entrega) => {
-          const celula = document.getElementById(`entrega${pedido.id}`);
+          const celula = document.getElementById(idCelula);
           if (celula) celula.innerHTML = textoEntrega(pedido, entrega);
         });
       });
     }
 
-    function verDetalhes(id) {
+    async function carregarHistorico() {
+      document.getElementById('historico').innerHTML = '<tr><td colspan="7" class="vazio">Carregando pedidos...</td></tr>';
+      const pedidos = await api(`${PEDIDOS_URL}/pedidos/cliente/${clienteId}`);
+      mostrarPedidos(pedidos, 'historico', true, 'Você ainda não fez pedidos.');
+    }
+
+    function buscarPedidosCliente() {
+      const id = Number(document.getElementById('buscaClienteId').value);
+      executar(async () => {
+        if (!Number.isInteger(id) || id <= 0) throw new Error('Digite um ID de cliente válido');
+        document.getElementById('detalheBusca').innerHTML = '';
+        document.getElementById('resultadoBusca').innerHTML = '<tr><td colspan="7" class="vazio">Buscando...</td></tr>';
+        const pedidos = await api(`${PEDIDOS_URL}/pedidos/cliente/${id}`);
+        mostrarPedidos(pedidos, 'resultadoBusca', false, `Nenhum pedido encontrado para o cliente ${id}.`);
+        mostrarMensagem(`${pedidos.length} pedido(s) do cliente ${id}`, 'ok');
+      });
+    }
+
+    function verDetalhes(id, destino = 'detalhePedido') {
       executar(async () => {
         const pedido = await api(`${PEDIDOS_URL}/pedidos/${id}`);
         const pagamentos = await api(`${PAGAMENTO_URL}/pagamentos/pedido/${id}`).catch(() => []);
@@ -349,7 +403,7 @@
           if (pagamento.troco) infoPagamento += ` (troco de ${dinheiro(pagamento.troco)})`;
           infoPagamento += '</p>';
         }
-        document.getElementById('detalhePedido').innerHTML = `
+        document.getElementById(destino).innerHTML = `
           <h3>Pedido #${pedido.id}</h3>
           <ul>${itens}</ul>
           <p>Subtotal: ${dinheiro(pedido.subtotal)} | Desconto: ${dinheiro(pedido.desconto)} | <b>Total: ${dinheiro(pedido.total)}</b></p>
@@ -418,6 +472,7 @@
 
         const { pedido, pagamento } = await api(`${PEDIDOS_URL}/pedidos`, 'POST', corpo);
         const area = document.getElementById('resultadoPagamento');
+        document.getElementById('areaResultado').classList.remove('oculto');
         area.innerHTML = `<p>Pedido #${pedido.id} criado. Status: <b>${STATUS_PEDIDO[pedido.status]}</b></p>`;
 
         if (pagamento.metodo === 'pix') {
@@ -442,6 +497,7 @@
     function simularPix(pagamentoId) {
       executar(async () => {
         await api(`${PAGAMENTO_URL}/pagamentos/${pagamentoId}/confirmar`, 'POST');
+        document.getElementById('areaResultado').classList.remove('oculto');
         document.getElementById('resultadoPagamento').innerHTML = '<p>Pix confirmado. Pedido enviado para entrega.</p>';
         await carregarHistorico();
       }, 'Pagamento confirmado');
@@ -468,6 +524,7 @@
         return;
       }
       document.getElementById('conteudo').classList.remove('oculto');
+      if (podeOperar()) document.getElementById('areaBusca').classList.remove('oculto');
       carregarTudo();
     }
 
