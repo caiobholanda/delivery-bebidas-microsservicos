@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delivery de Bebidas - Estoque e Entregas</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 0 16px; background: #f4f6f8; color: #222; }
+    h1 { color: #1d4e89; }
+    section { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+    input, select, button { padding: 8px; margin: 4px 4px 4px 0; border: 1px solid #ccc; border-radius: 4px; }
+    button { background: #1d4e89; color: #fff; border: none; cursor: pointer; }
+    button.secundario { background: #888; }
+    button.perigo { background: #c0392b; }
+    button.sucesso { background: #2e7d32; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 6px; border-bottom: 1px solid #eee; }
+    .repor { color: #c0392b; font-weight: bold; }
+    .falha { color: #c0392b; font-size: 12px; }
+    #mensagem { padding: 10px; border-radius: 4px; display: none; }
+    #mensagem.erro { display: block; background: #fdecea; color: #c0392b; }
+    #mensagem.ok { display: block; background: #e8f5e9; color: #2e7d32; }
+  </style>
+</head>
+<body>
+  <h1>Delivery de Bebidas</h1>
+  <div id="mensagem"></div>
+
+  <section>
+    <h2>Estoque</h2>
+    <button onclick="carregarEstoque()">Todas as bebidas</button>
+    <button class="secundario" onclick="carregarEstoque(true)">Só o que precisa repor</button>
+    <table>
+      <thead><tr><th>ID</th><th>Bebida</th><th>Quantidade</th><th>Mínimo</th><th>Situação</th><th>Repor</th></tr></thead>
+      <tbody id="estoque"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Entregas</h2>
+    <select id="filtroStatus" onchange="carregarEntregas()">
+      <option value="">Todos os status</option>
+      <option value="aguardando_entregador">Aguardando entregador</option>
+      <option value="atribuida">Atribuída</option>
+      <option value="em_rota">Em rota</option>
+      <option value="falhou">Falhou</option>
+      <option value="entregue">Entregue</option>
+      <option value="cancelada">Cancelada</option>
+    </select>
+    <button onclick="carregarEntregas()">Atualizar</button>
+    <table>
+      <thead><tr><th>#</th><th>Pedido</th><th>Endereço</th><th>Status</th><th>Entregador</th><th>Ações</th></tr></thead>
+      <tbody id="entregas"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Entregadores</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Nome</th><th>Telefone</th><th>Veículo</th><th>Situação</th><th></th></tr></thead>
+      <tbody id="entregadores"></tbody>
+    </table>
+    <h3>Cadastrar entregador</h3>
+    <input id="entNome" placeholder="Nome">
+    <input id="entTelefone" placeholder="Telefone com DDD">
+    <select id="entVeiculo">
+      <option value="moto">Moto</option>
+      <option value="carro">Carro</option>
+      <option value="bicicleta">Bicicleta</option>
+    </select>
+    <input id="entPlaca" placeholder="Placa" size="8">
+    <button onclick="cadastrarEntregador()">Cadastrar</button>
+  </section>
+
+  <script>
+    const ESTOQUE_URL = 'https://estoque-service-vitor.onrender.com';
+    const ENTREGAS_URL = 'https://entregas-service-vitor.onrender.com';
+    const CATALOGO_URL = 'https://catalogo-service-joao.onrender.com';
+
+    const NOMES_STATUS = {
+      aguardando_entregador: 'Aguardando entregador',
+      atribuida: 'Atribuída',
+      em_rota: 'Em rota',
+      entregue: 'Entregue',
+      falhou: 'Falhou',
+      cancelada: 'Cancelada'
+    };
+
+    let nomesBebidas = {};
+    let entregadores = [];
+
+    function texto(valor) {
+      const div = document.createElement('div');
+      div.textContent = valor ?? '';
+      return div.innerHTML;
+    }
+
+    function mostrarMensagem(mensagem, tipo) {
+      const caixa = document.getElementById('mensagem');
+      caixa.textContent = mensagem;
+      caixa.className = tipo;
+    }
+
+    async function api(url, metodo = 'GET', corpo) {
+      const resposta = await fetch(url, {
+        method: metodo,
+        headers: { 'Content-Type': 'application/json' },
+        body: corpo ? JSON.stringify(corpo) : undefined
+      });
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(dados.erro || 'Erro na requisição');
+      return dados;
+    }
+
+    async function executar(acao, sucesso) {
+      try {
+        await acao();
+        if (sucesso) mostrarMensagem(sucesso, 'ok');
+      } catch (erro) {
+        mostrarMensagem(erro.message, 'erro');
+      }
+    }
+
+    async function carregarNomesBebidas() {
+      const bebidas = await api(`${CATALOGO_URL}/bebidas`).catch(() => []);
+      bebidas.forEach((bebida) => { nomesBebidas[bebida.id] = bebida.nome; });
+    }
+
+    function carregarEstoque(soRepor) {
+      executar(async () => {
+        const itens = await api(`${ESTOQUE_URL}/estoque${soRepor ? '/reposicao' : ''}`);
+        const corpo = document.getElementById('estoque');
+        corpo.innerHTML = '';
+        itens.forEach((item) => {
+          const linha = document.createElement('tr');
+          linha.innerHTML = `
+            <td>${item.bebidaId}</td>
+            <td>${texto(nomesBebidas[item.bebidaId] || '-')}</td>
+            <td>${item.quantidade}</td>
+            <td>${item.quantidadeMinima}</td>
+            <td>${item.precisaRepor ? '<span class="repor">Repor</span>' : 'OK'}</td>
+            <td>
+              <input type="number" id="repor${item.bebidaId}" min="1" value="12" style="width:60px">
+              <button class="sucesso" onclick="repor(${item.bebidaId})">Repor</button>
+            </td>`;
+          corpo.appendChild(linha);
+        });
+      });
+    }
+
+    function repor(bebidaId) {
+      executar(async () => {
+        const quantidade = Number(document.getElementById(`repor${bebidaId}`).value);
+        const item = await api(`${ESTOQUE_URL}/estoque/${bebidaId}/repor`, 'POST', { quantidade });
+        carregarEstoque();
+        mostrarMensagem(`Bebida ${bebidaId} agora tem ${item.quantidade} unidades`, 'ok');
+      });
+    }
+
+    function opcoesEntregadores(selecionado) {
+      return entregadores
+        .filter((entregador) => entregador.ativo)
+        .map((entregador) => `<option value="${entregador.id}" ${entregador.id === selecionado ? 'selected' : ''}>${texto(entregador.nome)}</option>`)
+        .join('');
+    }
+
+    function acoesEntrega(entrega) {
+      if (['aguardando_entregador', 'atribuida', 'falhou'].includes(entrega.status)) {
+        let acoes = `
+          <select id="entregador${entrega.id}">${opcoesEntregadores(entrega.entregadorId)}</select>
+          <button onclick="atribuir(${entrega.id})">Atribuir</button>`;
+        if (entrega.status === 'atribuida') acoes += `<button class="sucesso" onclick="iniciar(${entrega.id})">Saiu para entrega</button>`;
+        return acoes;
+      }
+      if (entrega.status === 'em_rota') {
+        return `
+          <button class="sucesso" onclick="finalizar(${entrega.id})">Entregue</button>
+          <button class="perigo" onclick="registrarFalha(${entrega.id})">Falhou</button>`;
+      }
+      return '';
+    }
+
+    async function carregarEntregadores() {
+      entregadores = await api(`${ENTREGAS_URL}/entregadores`);
+      const corpo = document.getElementById('entregadores');
+      corpo.innerHTML = '';
+      entregadores.forEach((entregador) => {
+        let situacao = 'Inativo';
+        if (entregador.ativo) situacao = entregador.emRota ? 'Em rota' : 'Disponível';
+        if (entregador.entregasPendentes) situacao += ` (${entregador.entregasPendentes} na fila)`;
+        const linha = document.createElement('tr');
+        linha.innerHTML = `
+          <td>${entregador.id}</td>
+          <td>${texto(entregador.nome)}</td>
+          <td>${texto(entregador.telefone)}</td>
+          <td>${entregador.veiculo}${entregador.placa ? ' - ' + texto(entregador.placa) : ''}</td>
+          <td>${situacao}</td>
+          <td><button class="secundario" onclick="alterarAtivo(${entregador.id}, ${!entregador.ativo})">${entregador.ativo ? 'Desativar' : 'Ativar'}</button></td>`;
+        corpo.appendChild(linha);
+      });
+    }
+
+    async function listarEntregas() {
+      const status = document.getElementById('filtroStatus').value;
+      const entregas = await api(`${ENTREGAS_URL}/entregas${status ? '?status=' + status : ''}`);
+      const corpo = document.getElementById('entregas');
+      corpo.innerHTML = '';
+      entregas.forEach((entrega) => {
+        const falha = entrega.motivoFalha && entrega.status === 'falhou'
+          ? `<br><span class="falha">${texto(entrega.motivoFalha)}</span>` : '';
+        const linha = document.createElement('tr');
+        linha.innerHTML = `
+          <td>${entrega.id}</td>
+          <td>${entrega.pedidoId}</td>
+          <td>${texto(entrega.endereco)}</td>
+          <td>${NOMES_STATUS[entrega.status]}${falha}</td>
+          <td>${texto(entrega.entregadorNome || '-')}</td>
+          <td>${acoesEntrega(entrega)}</td>`;
+        corpo.appendChild(linha);
+      });
+    }
+
+    function carregarEntregas() {
+      executar(async () => {
+        await carregarEntregadores();
+        await listarEntregas();
+      });
+    }
+
+    function atribuir(id) {
+      executar(async () => {
+        const entregadorId = Number(document.getElementById(`entregador${id}`).value);
+        await api(`${ENTREGAS_URL}/entregas/${id}/atribuir`, 'PATCH', { entregadorId });
+        await carregarEntregadores();
+        await listarEntregas();
+      }, `Entregador atribuído à entrega #${id}`);
+    }
+
+    function iniciar(id) {
+      executar(async () => {
+        await api(`${ENTREGAS_URL}/entregas/${id}/iniciar`, 'PATCH');
+        await carregarEntregadores();
+        await listarEntregas();
+      }, `Entrega #${id} saiu para entrega`);
+    }
+
+    function finalizar(id) {
+      executar(async () => {
+        await api(`${ENTREGAS_URL}/entregas/${id}/finalizar`, 'PATCH');
+        await carregarEntregadores();
+        await listarEntregas();
+      }, `Entrega #${id} finalizada`);
+    }
+
+    function registrarFalha(id) {
+      const motivo = prompt('Motivo da falha (ex.: cliente ausente)');
+      if (!motivo) return;
+      executar(async () => {
+        await api(`${ENTREGAS_URL}/entregas/${id}/falha`, 'PATCH', { motivo });
+        await carregarEntregadores();
+        await listarEntregas();
+      }, `Falha registrada na entrega #${id}`);
+    }
+
+    function cadastrarEntregador() {
+      executar(async () => {
+        await api(`${ENTREGAS_URL}/entregadores`, 'POST', {
+          nome: document.getElementById('entNome').value,
+          telefone: document.getElementById('entTelefone').value,
+          veiculo: document.getElementById('entVeiculo').value,
+          placa: document.getElementById('entPlaca').value
+        });
+        ['entNome', 'entTelefone', 'entPlaca'].forEach((campo) => { document.getElementById(campo).value = ''; });
+        await carregarEntregadores();
+        await listarEntregas();
+      }, 'Entregador cadastrado');
+    }
+
+    function alterarAtivo(id, ativo) {
+      executar(async () => {
+        await api(`${ENTREGAS_URL}/entregadores/${id}/status`, 'PATCH', { ativo });
+        await carregarEntregadores();
+        await listarEntregas();
+      }, ativo ? 'Entregador ativado' : 'Entregador desativado');
+    }
+
+    carregarNomesBebidas().then(() => carregarEstoque());
+    carregarEntregas();
+  </script>
+</body>
+</html>
