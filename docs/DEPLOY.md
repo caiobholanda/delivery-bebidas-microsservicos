@@ -149,10 +149,11 @@ O front chama os serviços direto do navegador. Todo serviço precisa liberar CO
 
 | Serviço | Responsável | URL |
 |---|---|---|
-| Autenticação | João Gabriel | |
-| Catálogo | João Gabriel | |
+| Autenticação | João Gabriel | https://autenticacao-service-joao.onrender.com |
+| Catálogo | João Gabriel | https://catalogo-service-joao.onrender.com |
 | Estoque | Vitor Costa | |
 | Entregas | Vitor Costa | |
 | Pedidos | Caio Barsi | https://pedidos-service-caio.onrender.com |
 | Pagamento | Caio Barsi | https://pagamento-service-caio.onrender.com |
 | Front | Caio Barsi | https://delivery-bebidas-front.onrender.com |
+| Front (login e catálogo) | João Gabriel | https://delivery-bebidas-front-joao.onrender.com |

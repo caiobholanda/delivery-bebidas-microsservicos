@@ -111,6 +111,45 @@ Para dinheiro, opcionalmente `{ "trocoPara": 50 }`.
 
 ---
 
+## Rotas do Autenticação e do Catálogo (João)
+
+### Autenticação
+
+| Método | Rota | Corpo | Resposta |
+|---|---|---|---|
+| POST | `/auth/cadastro` | `{ "nome": "Maria", "email": "maria@email.com", "senha": "123456", "dataNascimento": "2000-05-10" }` | 201 com `{ "id", "nome", "email", "perfil" }` |
+| POST | `/auth/login` | `{ "email": "maria@email.com", "senha": "123456" }` | 200 com `{ "token", "usuario": { "id", "nome", "email", "perfil" } }` |
+| GET | `/auth/validar` | cabeçalho `Authorization: Bearer {token}` | 200 com `{ "id", "nome", "email", "perfil" }` |
+| PUT | `/auth/senha` | `{ "senhaAtual": "...", "novaSenha": "..." }` com `Authorization` | 200 e a sessão é encerrada |
+
+- Só maiores de 18 anos podem se cadastrar (400 caso contrário). E-mail repetido: 409. Login errado: 401.
+- Perfis: `cliente`, `entregador` e `administrador`. O cadastro público cria sempre `cliente`.
+- O `id` retornado é o `clienteId` usado nos serviços de Pedidos e Entregas.
+- O token vale por 24 horas.
+
+### Catálogo
+
+| Método | Rota | Quem usa |
+|---|---|---|
+| GET | `/bebidas?busca=&categoria=&precoMin=&precoMax=&ordem=` | Front. `ordem`: `preco_asc`, `preco_desc` (padrão: nome) |
+| GET | `/bebidas/destaques` | Front |
+| GET | `/bebidas/promocoes` | Front |
+| GET | `/bebidas/{id}` | Front e serviço de Pedidos |
+| GET | `/categorias` | Front (filtro de categorias) |
+| POST | `/bebidas` | Administrador (exige `Authorization`). Retorna 201 |
+| PUT | `/bebidas/{id}` | Administrador (exige `Authorization`) |
+
+Corpo do POST e do PUT:
+```json
+{ "nome": "Heineken 350ml", "categoria": "Cerveja", "descricao": "Lata gelada", "preco": 6.5, "precoPromocional": 5.9, "destaque": true }
+```
+- `precoPromocional` é opcional e precisa ser menor que `preco`.
+- Sem token: 401. Token de quem não é administrador: 403.
+- O Catálogo chama `GET /auth/validar` do serviço de Autenticação para conferir o token.
+- Não existe rota para apagar bebida: o histórico de pedidos guarda o `bebidaId`.
+
+---
+
 ## Padrões combinados
 
 - JSON com nomes em camelCase (`bebidaId`, `pedidoId`, `clienteId`).
@@ -118,4 +157,5 @@ Para dinheiro, opcionalmente `{ "trocoPara": 50 }`.
 - IDs numéricos.
 - `clienteId` vem do serviço de Autenticação (João).
 - Todo serviço tem `GET /health`.
+- Rotas protegidas recebem `Authorization: Bearer {token}`, obtido em `POST /auth/login`.
 - CORS liberado.

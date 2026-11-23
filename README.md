@@ -33,8 +33,39 @@ Sistema de delivery de bebidas dividido em microsserviços. Cada serviço tem se
 | | URL |
 |---|---|
 | Front | https://delivery-bebidas-front.onrender.com |
+| Front (login e catálogo) | https://delivery-bebidas-front-joao.onrender.com |
+| Autenticação | https://autenticacao-service-joao.onrender.com |
+| Catálogo | https://catalogo-service-joao.onrender.com |
 | Pedidos | https://pedidos-service-caio.onrender.com |
 | Pagamento | https://pagamento-service-caio.onrender.com |
+
+## Autenticação e Catálogo (João Gabriel)
+
+Requisitos: Java 21 e MySQL 8. Os dois serviços usam Spring Boot e Maven.
+
+Para rodar localmente (faça o mesmo em `catalogo-service`):
+
+```bash
+cd autenticacao-service
+mvn spring-boot:run
+```
+
+Por padrão o serviço conecta no MySQL local (`root`, sem senha). Se o seu MySQL tem senha, defina antes de rodar:
+
+```bash
+export SPRING_DATASOURCE_PASSWORD=sua_senha
+```
+
+O banco e as tabelas são criados automaticamente na primeira execução. O Catálogo já vem com 12 bebidas de exemplo (ids de 1 a 12), e o Autenticação cria um administrador na primeira execução.
+
+| Variável | Descrição |
+|---|---|
+| `SPRING_DATASOURCE_URL` | `jdbc:mysql://host:porta/banco` |
+| `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | Usuário e senha do banco |
+| `ADMIN_EMAIL` / `ADMIN_SENHA` | Administrador criado na primeira execução (Autenticação) |
+| `AUTENTICACAO_URL` | Endereço do serviço de Autenticação (Catálogo) |
+
+Rotas e exemplos: [Contratos entre os serviços](docs/CONTRATOS.md). A página `frontend-autenticacao-catalogo/index.html` permite entrar, cadastrar, consultar o catálogo e adicionar bebidas ao carrinho.
 
 ## Pedidos e Pagamento (Caio)
 
