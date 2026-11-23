@@ -128,6 +128,49 @@
       }
     }
 
+    const SERVICOS = {
+      'Autenticação': 'https://autenticacao-service-joao.onrender.com/health',
+      'Catálogo': 'https://catalogo-service-joao.onrender.com/health',
+      'Estoque': 'https://estoque-service-vitor.onrender.com/health',
+      'Entregas': 'https://entregas-service-vitor.onrender.com/health',
+      'Pedidos': 'https://pedidos-service-caio.onrender.com/health',
+      'Pagamento': 'https://pagamento-service-caio.onrender.com/health'
+    };
+
+    function acordarServicos() {
+      const nomes = Object.keys(SERVICOS);
+      const prontos = new Set();
+      let aviso = document.getElementById('avisoServicos');
+      if (!aviso) {
+        aviso = document.createElement('div');
+        aviso.id = 'avisoServicos';
+        aviso.style.cssText = 'background:#fff8e1;color:#8a6d00;padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:14px;';
+        document.getElementById('menu').insertAdjacentElement('afterend', aviso);
+      }
+      const atualizar = () => {
+        const faltando = nomes.filter((nome) => !prontos.has(nome));
+        if (!faltando.length) {
+          aviso.style.display = 'none';
+          return;
+        }
+        aviso.style.display = 'block';
+        aviso.textContent = `Ligando os serviços (${prontos.size} de ${nomes.length} prontos). Aguardando: ${faltando.join(', ')}. Na primeira visita isso pode levar até 1 minuto.`;
+      };
+      atualizar();
+      nomes.forEach((nome) => {
+        const tentar = (restantes) => {
+          fetch(SERVICOS[nome], { cache: 'no-store' })
+            .then((resposta) => {
+              if (!resposta.ok) throw new Error();
+              prontos.add(nome);
+              atualizar();
+            })
+            .catch(() => { if (restantes > 0) setTimeout(() => tentar(restantes - 1), 5000); });
+        };
+        tentar(12);
+      });
+    }
+
     function linkTela(tela) {
       return sessao ? `${TELAS[tela]}#sessao=${encodeURIComponent(JSON.stringify(sessao))}` : `${TELAS[tela]}#sair`;
     }
@@ -357,6 +400,7 @@
     }
 
     montarMenu('operacao');
+    acordarServicos();
     document.getElementById('linkEntrar').href = TELAS.catalogo;
     if (podeOperar()) {
       document.getElementById('conteudo').classList.remove('oculto');

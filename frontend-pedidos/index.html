@@ -73,10 +73,6 @@
         <input type="number" id="trocoPara" placeholder="Troco para (R$)">
       </div>
       <button onclick="finalizarPedido()">Finalizar</button>
-    </section>
-
-    <section id="areaResultado" class="oculto">
-      <h2>Pagamento</h2>
       <div id="resultadoPagamento"></div>
     </section>
 
@@ -145,6 +141,49 @@
       } catch (e) {
         return null;
       }
+    }
+
+    const SERVICOS = {
+      'Autenticação': 'https://autenticacao-service-joao.onrender.com/health',
+      'Catálogo': 'https://catalogo-service-joao.onrender.com/health',
+      'Estoque': 'https://estoque-service-vitor.onrender.com/health',
+      'Entregas': 'https://entregas-service-vitor.onrender.com/health',
+      'Pedidos': 'https://pedidos-service-caio.onrender.com/health',
+      'Pagamento': 'https://pagamento-service-caio.onrender.com/health'
+    };
+
+    function acordarServicos() {
+      const nomes = Object.keys(SERVICOS);
+      const prontos = new Set();
+      let aviso = document.getElementById('avisoServicos');
+      if (!aviso) {
+        aviso = document.createElement('div');
+        aviso.id = 'avisoServicos';
+        aviso.style.cssText = 'background:#fff8e1;color:#8a6d00;padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:14px;';
+        document.getElementById('menu').insertAdjacentElement('afterend', aviso);
+      }
+      const atualizar = () => {
+        const faltando = nomes.filter((nome) => !prontos.has(nome));
+        if (!faltando.length) {
+          aviso.style.display = 'none';
+          return;
+        }
+        aviso.style.display = 'block';
+        aviso.textContent = `Ligando os serviços (${prontos.size} de ${nomes.length} prontos). Aguardando: ${faltando.join(', ')}. Na primeira visita isso pode levar até 1 minuto.`;
+      };
+      atualizar();
+      nomes.forEach((nome) => {
+        const tentar = (restantes) => {
+          fetch(SERVICOS[nome], { cache: 'no-store' })
+            .then((resposta) => {
+              if (!resposta.ok) throw new Error();
+              prontos.add(nome);
+              atualizar();
+            })
+            .catch(() => { if (restantes > 0) setTimeout(() => tentar(restantes - 1), 5000); });
+        };
+        tentar(12);
+      });
     }
 
     function linkTela(tela) {
@@ -379,7 +418,6 @@
 
         const { pedido, pagamento } = await api(`${PEDIDOS_URL}/pedidos`, 'POST', corpo);
         const area = document.getElementById('resultadoPagamento');
-        document.getElementById('areaResultado').classList.remove('oculto');
         area.innerHTML = `<p>Pedido #${pedido.id} criado. Status: <b>${STATUS_PEDIDO[pedido.status]}</b></p>`;
 
         if (pagamento.metodo === 'pix') {
@@ -404,7 +442,6 @@
     function simularPix(pagamentoId) {
       executar(async () => {
         await api(`${PAGAMENTO_URL}/pagamentos/${pagamentoId}/confirmar`, 'POST');
-        document.getElementById('areaResultado').classList.remove('oculto');
         document.getElementById('resultadoPagamento').innerHTML = '<p>Pix confirmado. Pedido enviado para entrega.</p>';
         await carregarHistorico();
       }, 'Pagamento confirmado');
@@ -422,6 +459,7 @@
       const parametros = new URLSearchParams(window.location.search);
       clienteId = sessao ? sessao.usuario.id : parametros.get('clienteId');
       montarMenu('pedidos');
+      acordarServicos();
       document.getElementById('linkEntrar').href = TELAS.catalogo;
       document.getElementById('linkContinuar').href = linkTela('catalogo');
 
