@@ -129,6 +129,7 @@
     function acordarServicos() {
       const nomes = Object.keys(SERVICOS);
       const prontos = new Set();
+      const falharam = new Set();
       let fechado = false;
 
       const fundo = document.createElement('div');
@@ -136,7 +137,7 @@
       fundo.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:1000;';
       fundo.innerHTML = `
         <div style="background:#fff;border-radius:10px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 24px rgba(0,0,0,.25);font-family:Arial,sans-serif;">
-          <h2 style="margin-top:0;color:#1d4e89;">Ligando o sistema</h2>
+          <h2 id="tituloServicos" style="margin-top:0;color:#1d4e89;">Ligando o sistema</h2>
           <p style="color:#444;">Os serviços ficam desligados quando ninguém usa e estão sendo ligados agora. Na primeira visita isso pode levar até 1 minuto.</p>
           <div id="barraServicos" style="background:#e8eef6;border-radius:6px;height:10px;overflow:hidden;margin:12px 0;">
             <div id="progressoServicos" style="background:#1d4e89;height:100%;width:0;transition:width .4s;"></div>
@@ -152,10 +153,16 @@
 
       const atualizar = () => {
         document.getElementById('listaServicos').innerHTML = nomes
-          .map((nome) => prontos.has(nome)
-            ? `<li style="color:#2e7d32;">&#10004; ${nome}</li>`
-            : `<li style="color:#8a6d00;">&#8987; ${nome} (ligando...)</li>`)
+          .map((nome) => {
+            if (prontos.has(nome)) return `<li style="color:#2e7d32;">&#10004; ${nome}</li>`;
+            if (falharam.has(nome)) return `<li style="color:#c0392b;">&#10006; ${nome} (não respondeu)</li>`;
+            return `<li style="color:#8a6d00;">&#8987; ${nome} (ligando...)</li>`;
+          })
           .join('');
+        if (falharam.size && prontos.size + falharam.size === nomes.length) {
+          document.getElementById('tituloServicos').textContent = 'Alguns serviços não responderam';
+          document.getElementById('fecharPopupServicos').textContent = 'Continuar';
+        }
         document.getElementById('progressoServicos').style.width = `${Math.round(prontos.size / nomes.length * 100)}%`;
         if (prontos.size === nomes.length) {
           fundo.style.display = 'none';
@@ -176,10 +183,21 @@
               prontos.add(nome);
               atualizar();
             })
-            .catch(() => { if (restantes > 0) setTimeout(() => tentar(restantes - 1), 5000); });
+            .catch(() => {
+              if (restantes > 0) {
+                setTimeout(() => tentar(restantes - 1), 5000);
+              } else {
+                falharam.add(nome);
+                atualizar();
+              }
+            });
         };
         tentar(12);
       });
+
+      setInterval(() => {
+        nomes.forEach((nome) => fetch(SERVICOS[nome], { cache: 'no-store' }).catch(() => {}));
+      }, 240000);
     }
 
     function linkTela(tela) {
@@ -253,12 +271,29 @@
       return dados;
     }
 
-    async function executar(acao) {
+    async function executar(acao, aguarde) {
+      if (aguarde) mostrarMensagem(aguarde, 'ok');
+      document.body.style.cursor = 'progress';
       try {
         await acao();
       } catch (erro) {
         mostrarMensagem(erro.message, 'erro');
+      } finally {
+        document.body.style.cursor = '';
       }
+    }
+
+    function lerCache(chave) {
+      try {
+        const valor = sessionStorage.getItem(chave);
+        return valor ? JSON.parse(valor) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function guardarCache(chave, valor) {
+      try { sessionStorage.setItem(chave, JSON.stringify(valor)); } catch (e) { }
     }
 
     function guardarSessao() {
@@ -292,7 +327,7 @@
         guardarSessao();
         mostrarMensagem(`Bem-vindo, ${sessao.usuario.nome}!`, 'ok');
         atualizarTela();
-      });
+      }, 'Entrando...');
     }
 
     function cadastrar() {
@@ -361,7 +396,12 @@
             const valor = document.getElementById(id).value;
             if (valor) filtros.set(campo, valor);
           });
-        mostrarBebidas(await api(`${CATALOGO_URL}/bebidas?${filtros}`));
+        const chave = `cacheBebidas:${filtros}`;
+        const guardadas = lerCache(chave);
+        if (guardadas) mostrarBebidas(guardadas);
+        const bebidas = await api(`${CATALOGO_URL}/bebidas?${filtros}`);
+        guardarCache(chave, bebidas);
+        mostrarBebidas(bebidas);
         carregarCategorias();
       });
     }
@@ -385,10 +425,11 @@
       executar(async () => {
         if (!sessao) throw new Error('Entre na sua conta para adicionar ao carrinho');
         const quantidade = Number(document.getElementById(`qtd${bebidaId}`).value);
-        await api(`${PEDIDOS_URL}/carrinho/${sessao.usuario.id}/itens`, 'POST', { bebidaId, quantidade });
+        const carrinho = await api(`${PEDIDOS_URL}/carrinho/${sessao.usuario.id}/itens`, 'POST', { bebidaId, quantidade });
+        guardarCache(`cacheCarrinho:${sessao.usuario.id}`, carrinho);
         mostrarMensagem('Bebida adicionada ao carrinho. Clique em "Carrinho e pedidos" para finalizar.', 'ok');
-        atualizarMenu();
-      });
+        montarMenu('catalogo', carrinho.itens.reduce((soma, item) => soma + item.quantidade, 0));
+      }, 'Adicionando ao carrinho...');
     }
 
     function editarBebida(id) {
