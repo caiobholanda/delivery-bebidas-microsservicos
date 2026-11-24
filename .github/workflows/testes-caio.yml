@@ -1,0 +1,31 @@
+name: Testes - Pedidos e Pagamento
+
+on:
+  push:
+    paths:
+      - 'pedidos-service/**'
+      - 'pagamento-service/**'
+      - '.github/workflows/testes-caio.yml'
+  pull_request:
+    paths:
+      - 'pedidos-service/**'
+      - 'pagamento-service/**'
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        servico: [pedidos-service, pagamento-service]
+    defaults:
+      run:
+        working-directory: ${{ matrix.servico }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ${{ matrix.servico }}/package-lock.json
+      - run: npm ci
+      - run: npm test
