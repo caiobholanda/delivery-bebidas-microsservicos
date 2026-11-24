@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const swaggerUi = require('swagger-ui-express');
+const documentacao = require('./docs');
 const { iniciarBanco } = require('./db');
 const carrinhoRoutes = require('./routes/carrinho');
 const pedidosRoutes = require('./routes/pedidos');
@@ -12,6 +14,9 @@ app.use(express.json());
 app.get('/health', (req, res) => {
   res.json({ servico: 'pedidos', status: 'ok' });
 });
+
+app.get('/docs.json', (req, res) => res.json(documentacao));
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(documentacao, { customSiteTitle: 'Serviço de Pedidos - API' }));
 
 app.use('/carrinho', carrinhoRoutes);
 app.use('/pedidos', pedidosRoutes);
