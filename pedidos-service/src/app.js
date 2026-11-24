@@ -1,5 +1,5 @@
 const express = require('express');
-const cors = require('cors');
+const { aplicarSeguranca } = require('./seguranca');
 const swaggerUi = require('swagger-ui-express');
 const documentacao = require('./docs');
 const { pool } = require('./db');
@@ -7,7 +7,7 @@ const carrinhoRoutes = require('./routes/carrinho');
 const pedidosRoutes = require('./routes/pedidos');
 
 const app = express();
-app.use(cors());
+aplicarSeguranca(app);
 app.use(express.json());
 
 app.get('/health', async (req, res) => {

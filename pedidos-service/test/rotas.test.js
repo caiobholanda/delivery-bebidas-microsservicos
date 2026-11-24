@@ -84,3 +84,16 @@ test('JSON mal formado responde 400', async () => {
   const { status } = await chamar('/pedidos', 'POST', '{ isso nao e json');
   assert.strictEqual(status, 400);
 });
+
+test('responde com cabecalhos de seguranca e sem X-Powered-By', async () => {
+  const resposta = await fetch(`${base}/nao-existe`);
+  assert.strictEqual(resposta.headers.get('x-content-type-options'), 'nosniff');
+  assert.strictEqual(resposta.headers.get('x-powered-by'), null);
+});
+
+test('libera CORS para o front do projeto e bloqueia outros sites', async () => {
+  const permitido = await fetch(`${base}/docs.json`, { headers: { Origin: 'https://delivery-bebidas-front.onrender.com' } });
+  assert.strictEqual(permitido.headers.get('access-control-allow-origin'), 'https://delivery-bebidas-front.onrender.com');
+  const bloqueado = await fetch(`${base}/docs.json`, { headers: { Origin: 'https://site-qualquer.com' } });
+  assert.strictEqual(bloqueado.headers.get('access-control-allow-origin'), null);
+});
