@@ -14,7 +14,7 @@
     button.perigo { background: #c0392b; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: 6px; border-bottom: 1px solid #eee; }
-    .oculto { display: none; }
+    .oculto { display: none !important; }
     .antigo { text-decoration: line-through; color: #888; }
     .promo { color: #2e7d32; font-weight: bold; }
     #mensagem { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 900; min-width: 280px; max-width: 90%; padding: 14px 44px 14px 18px; border-radius: 8px; font-size: 16px; font-weight: bold; box-shadow: 0 6px 20px rgba(0,0,0,.3); display: none; }
@@ -38,6 +38,9 @@
     <input id="loginEmail" type="email" placeholder="E-mail">
     <input id="loginSenha" type="password" placeholder="Senha">
     <button onclick="entrar()">Entrar</button>
+    <div style="background:#f4f6f8;border-radius:6px;padding:10px 14px;margin:10px 0;font-size:14px;">
+      <b>Contas de teste</b>: administrador <code>admin@gmail.com</code> / <code>123456</code> · entregador <code>entregador@gmail.com</code> / <code>123456</code> · cliente: crie uma conta abaixo.
+    </div>
 
     <h2>Criar conta</h2>
     <input id="cadNome" placeholder="Nome">
@@ -220,24 +223,36 @@
       }
     }
 
+    function perfilAtual() {
+      return sessao ? sessao.usuario.perfil : null;
+    }
+
+    function itensDoMenu(quantidadeCarrinho) {
+      const perfil = perfilAtual();
+      if (perfil === 'administrador') {
+        return [['catalogo', 'Catálogo (gestão)'], ['pedidos', 'Pedidos dos clientes'], ['operacao', 'Estoque e entregas']];
+      }
+      if (perfil === 'entregador') return [['operacao', 'Entregas']];
+      return [['catalogo', 'Catálogo'], ['pedidos', quantidadeCarrinho ? `Carrinho e pedidos (${quantidadeCarrinho})` : 'Carrinho e pedidos']];
+    }
+
     function montarMenu(atual, quantidadeCarrinho) {
-      const itens = [
-        ['catalogo', 'Catálogo'],
-        ['pedidos', quantidadeCarrinho ? `Carrinho e pedidos (${quantidadeCarrinho})` : 'Carrinho e pedidos']
-      ];
-      itens.push(['operacao', 'Estoque e entregas']);
-      const links = itens
+      const links = itensDoMenu(quantidadeCarrinho)
         .map(([tela, nome]) => `<a class="botao${tela === atual ? ' atual' : ''}" href="${linkTela(tela)}">${nome}</a>`)
         .join('');
       const usuario = sessao
-        ? `<span class="usuario">Olá, <b>${texto(sessao.usuario.nome)}</b></span><button class="perigo" onclick="sairDeTodas()">Sair</button>`
+        ? `<span class="usuario">Olá, <b>${texto(sessao.usuario.nome)}</b> (${texto(sessao.usuario.perfil)})</span><button class="perigo" onclick="sairDeTodas()">Sair</button>`
         : `<a class="botao" href="${TELAS.catalogo}">Entrar</a>`;
       document.getElementById('menu').innerHTML = `<div>${links}</div><div>${usuario}</div>`;
     }
 
+    function podeComprar() {
+      return !sessao || sessao.usuario.perfil === 'cliente';
+    }
+
     async function atualizarMenu() {
       montarMenu('catalogo');
-      if (!sessao) return;
+      if (!sessao || sessao.usuario.perfil !== 'cliente') return;
       try {
         const carrinho = await api(`${PEDIDOS_URL}/carrinho/${sessao.usuario.id}`);
         montarMenu('catalogo', carrinho.itens.reduce((soma, item) => soma + item.quantidade, 0));
@@ -327,6 +342,11 @@
         document.getElementById('usuarioPerfil').textContent = sessao.usuario.perfil;
         document.getElementById('usuarioId').textContent = sessao.usuario.id;
         document.getElementById('linkPedidos').href = linkTela('pedidos');
+        document.getElementById('linkPedidos').classList.toggle('oculto', sessao.usuario.perfil !== 'cliente');
+        if (sessao.usuario.perfil === 'entregador') {
+          window.location.href = linkTela('operacao');
+          return;
+        }
       }
       atualizarMenu();
       listarBebidas();
@@ -394,8 +414,8 @@
           <td>${texto(bebida.categoria)}</td>
           <td>${preco}</td>
           <td>
-            <input type="number" id="qtd${bebida.id}" value="1" min="1" style="width:55px">
-            <button onclick="adicionarAoCarrinho(${bebida.id})">Adicionar</button>
+            ${podeComprar() ? `<input type="number" id="qtd${bebida.id}" value="1" min="1" style="width:55px">
+            <button onclick="adicionarAoCarrinho(${bebida.id})">Adicionar</button>` : ''}
             ${sessao && sessao.usuario.perfil === 'administrador' ? `<button class="secundario" onclick="editarBebida(${bebida.id})">Editar</button>` : ''}
           </td>`;
         corpo.appendChild(linha);
@@ -438,6 +458,7 @@
     function adicionarAoCarrinho(bebidaId) {
       executar(async () => {
         if (!sessao) throw new Error('Entre na sua conta para adicionar ao carrinho');
+        if (!podeComprar()) throw new Error('Apenas clientes podem fazer pedidos');
         const quantidade = Number(document.getElementById(`qtd${bebidaId}`).value);
         const carrinho = await api(`${PEDIDOS_URL}/carrinho/${sessao.usuario.id}/itens`, 'POST', { bebidaId, quantidade });
         guardarCache(`cacheCarrinho:${sessao.usuario.id}`, carrinho);

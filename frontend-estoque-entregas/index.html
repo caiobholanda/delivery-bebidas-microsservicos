@@ -26,7 +26,8 @@
     a.botao { display: inline-block; padding: 8px 14px; margin: 2px 6px 2px 0; background: #e8eef6; color: #1d4e89; border-radius: 4px; text-decoration: none; }
     a.botao.atual { background: #1d4e89; color: #fff; }
     .usuario { margin-right: 8px; }
-    .oculto { display: none; }
+    .oculto { display: none !important; }
+    .detalhe { color: #666; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -52,7 +53,7 @@
 
   <div id="conteudo" class="oculto">
 
-  <section>
+  <section id="secaoEstoque">
     <h2>Estoque</h2>
     <button onclick="carregarEstoque()">Todas as bebidas</button>
     <button class="secundario" onclick="carregarEstoque(true)">Só o que precisa repor</button>
@@ -62,8 +63,8 @@
     </table>
   </section>
 
-  <section>
-    <h2>Entregas</h2>
+  <section id="secaoEntregas">
+    <h2 id="tituloEntregas">Entregas</h2>
     <select id="filtroStatus" onchange="carregarEntregas()">
       <option value="">Todos os status</option>
       <option value="aguardando_entregador">Aguardando entregador</option>
@@ -80,7 +81,7 @@
     </table>
   </section>
 
-  <section>
+  <section id="secaoEntregadores">
     <h2>Entregadores</h2>
     <table>
       <thead><tr><th>ID</th><th>Nome</th><th>Telefone</th><th>Veículo</th><th>Situação</th><th></th></tr></thead>
@@ -241,17 +242,25 @@
       }
     }
 
+    function perfilAtual() {
+      return sessao ? sessao.usuario.perfil : null;
+    }
+
+    function itensDoMenu(quantidadeCarrinho) {
+      const perfil = perfilAtual();
+      if (perfil === 'administrador') {
+        return [['catalogo', 'Catálogo (gestão)'], ['pedidos', 'Pedidos dos clientes'], ['operacao', 'Estoque e entregas']];
+      }
+      if (perfil === 'entregador') return [['operacao', 'Entregas']];
+      return [['catalogo', 'Catálogo'], ['pedidos', quantidadeCarrinho ? `Carrinho e pedidos (${quantidadeCarrinho})` : 'Carrinho e pedidos']];
+    }
+
     function montarMenu(atual, quantidadeCarrinho) {
-      const itens = [
-        ['catalogo', 'Catálogo'],
-        ['pedidos', quantidadeCarrinho ? `Carrinho e pedidos (${quantidadeCarrinho})` : 'Carrinho e pedidos']
-      ];
-      itens.push(['operacao', 'Estoque e entregas']);
-      const links = itens
+      const links = itensDoMenu(quantidadeCarrinho)
         .map(([tela, nome]) => `<a class="botao${tela === atual ? ' atual' : ''}" href="${linkTela(tela)}">${nome}</a>`)
         .join('');
       const usuario = sessao
-        ? `<span class="usuario">Olá, <b>${texto(sessao.usuario.nome)}</b></span><button class="perigo" onclick="sairDeTodas()">Sair</button>`
+        ? `<span class="usuario">Olá, <b>${texto(sessao.usuario.nome)}</b> (${texto(sessao.usuario.perfil)})</span><button class="perigo" onclick="sairDeTodas()">Sair</button>`
         : `<a class="botao" href="${TELAS.catalogo}">Entrar</a>`;
       document.getElementById('menu').innerHTML = `<div>${links}</div><div>${usuario}</div>`;
     }
@@ -344,6 +353,16 @@
     }
 
     function acoesEntrega(entrega) {
+      if (perfilAtual() === 'entregador') {
+        if (entrega.status === 'atribuida') return `<button class="sucesso" onclick="iniciar(${entrega.id})">Saiu para entrega</button>`;
+        if (entrega.status === 'em_rota') {
+          return `
+          <button class="sucesso" onclick="finalizar(${entrega.id})">Entregue</button>
+          <button class="perigo" onclick="registrarFalha(${entrega.id})">Falhou</button>`;
+        }
+        if (['aguardando_entregador', 'falhou'].includes(entrega.status)) return '<span class="detalhe">Aguardando o administrador definir o entregador</span>';
+        return '';
+      }
       if (['aguardando_entregador', 'atribuida', 'falhou'].includes(entrega.status)) {
         let acoes = `
           <select id="entregador${entrega.id}">${opcoesEntregadores(entrega.entregadorId)}</select>
@@ -468,8 +487,15 @@
     document.getElementById('linkEntrar').href = TELAS.catalogo;
     if (podeOperar()) {
       document.getElementById('conteudo').classList.remove('oculto');
-      carregarNomesBebidas().then(() => carregarEstoque());
-      carregarEntregas();
+      if (perfilAtual() === 'entregador') {
+        document.getElementById('secaoEstoque').classList.add('oculto');
+        document.getElementById('secaoEntregadores').classList.add('oculto');
+        document.getElementById('tituloEntregas').textContent = 'Entregas';
+        carregarEntregas();
+      } else {
+        carregarNomesBebidas().then(() => carregarEstoque());
+        carregarEntregas();
+      }
     } else {
       document.getElementById('semAcesso').classList.remove('oculto');
       if (sessao) {

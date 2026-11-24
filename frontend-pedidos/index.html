@@ -15,7 +15,7 @@
     button.sucesso { background: #2e7d32; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: 6px; border-bottom: 1px solid #eee; vertical-align: top; }
-    .oculto { display: none; }
+    .oculto { display: none !important; }
     .vazio { color: #666; }
     .detalhe { color: #666; font-size: 12px; }
     .pix { font-family: monospace; word-break: break-all; background: #eef; padding: 8px; }
@@ -41,8 +41,14 @@
     <a class="botao atual" id="linkEntrar" href="#">Ir para o login</a>
   </section>
 
+  <section id="areaEntregador" class="oculto">
+    <h2>Área do entregador</h2>
+    <p>Esta tela é para clientes fazerem pedidos. As suas entregas ficam em "Entregas".</p>
+    <a class="botao atual" id="linkEntregas" href="#">Ir para as entregas</a>
+  </section>
+
   <div id="conteudo" class="oculto">
-    <section>
+    <section id="secaoCarrinho">
       <h2>Carrinho</h2>
       <table>
         <thead><tr><th>Bebida</th><th>Preço</th><th>Qtd</th><th>Total</th><th></th></tr></thead>
@@ -82,7 +88,7 @@
       <div id="resultadoPagamento"></div>
     </section>
 
-    <section>
+    <section id="secaoMeusPedidos">
       <h2>Meus pedidos</h2>
       <button class="secundario" onclick="executar(carregarHistorico)">Atualizar</button>
       <table>
@@ -261,17 +267,25 @@
       }
     }
 
+    function perfilAtual() {
+      return sessao ? sessao.usuario.perfil : null;
+    }
+
+    function itensDoMenu(quantidadeCarrinho) {
+      const perfil = perfilAtual();
+      if (perfil === 'administrador') {
+        return [['catalogo', 'Catálogo (gestão)'], ['pedidos', 'Pedidos dos clientes'], ['operacao', 'Estoque e entregas']];
+      }
+      if (perfil === 'entregador') return [['operacao', 'Entregas']];
+      return [['catalogo', 'Catálogo'], ['pedidos', quantidadeCarrinho ? `Carrinho e pedidos (${quantidadeCarrinho})` : 'Carrinho e pedidos']];
+    }
+
     function montarMenu(atual, quantidadeCarrinho) {
-      const itens = [
-        ['catalogo', 'Catálogo'],
-        ['pedidos', quantidadeCarrinho ? `Carrinho e pedidos (${quantidadeCarrinho})` : 'Carrinho e pedidos']
-      ];
-      itens.push(['operacao', 'Estoque e entregas']);
-      const links = itens
+      const links = itensDoMenu(quantidadeCarrinho)
         .map(([tela, nome]) => `<a class="botao${tela === atual ? ' atual' : ''}" href="${linkTela(tela)}">${nome}</a>`)
         .join('');
       const usuario = sessao
-        ? `<span class="usuario">Olá, <b>${texto(sessao.usuario.nome)}</b></span><button class="perigo" onclick="sairDeTodas()">Sair</button>`
+        ? `<span class="usuario">Olá, <b>${texto(sessao.usuario.nome)}</b> (${texto(sessao.usuario.perfil)})</span><button class="perigo" onclick="sairDeTodas()">Sair</button>`
         : `<a class="botao" href="${TELAS.catalogo}">Entrar</a>`;
       document.getElementById('menu').innerHTML = `<div>${links}</div><div>${usuario}</div>`;
     }
@@ -299,12 +313,19 @@
     }
 
     async function api(url, metodo = 'GET', corpo) {
+      const cabecalhos = { 'Content-Type': 'application/json' };
+      if (sessao && url.startsWith(PEDIDOS_URL)) cabecalhos.Authorization = `Bearer ${sessao.token}`;
       const resposta = await fetch(url, {
         method: metodo,
-        headers: { 'Content-Type': 'application/json' },
+        headers: cabecalhos,
         body: corpo ? JSON.stringify(corpo) : undefined
       });
       const dados = await resposta.json().catch(() => ({}));
+      if (resposta.status === 401 && url.startsWith(PEDIDOS_URL)) {
+        try { sessionStorage.removeItem('sessao'); } catch (e) { }
+        setTimeout(() => { window.location.href = `${TELAS.catalogo}#sair`; }, 2500);
+        throw new Error('Sua sessão expirou. Você será levado para o login.');
+      }
       if (!resposta.ok) throw new Error(dados.erro || 'Erro na requisição');
       return dados;
     }
@@ -576,19 +597,28 @@
     }
 
     function iniciar() {
-      const parametros = new URLSearchParams(window.location.search);
-      clienteId = sessao ? sessao.usuario.id : parametros.get('clienteId');
+      clienteId = sessao ? sessao.usuario.id : null;
       montarMenu('pedidos');
       acordarServicos();
       document.getElementById('linkEntrar').href = TELAS.catalogo;
       document.getElementById('linkContinuar').href = linkTela('catalogo');
+      document.getElementById('linkEntregas').href = linkTela('operacao');
 
-      if (!clienteId) {
+      const perfil = perfilAtual();
+      if (!perfil) {
         document.getElementById('semLogin').classList.remove('oculto');
         return;
       }
+      if (perfil === 'entregador') {
+        document.getElementById('areaEntregador').classList.remove('oculto');
+        return;
+      }
       document.getElementById('conteudo').classList.remove('oculto');
-      if (podeOperar()) document.getElementById('areaBusca').classList.remove('oculto');
+      if (perfil === 'administrador') {
+        ['secaoCarrinho', 'areaFinalizar', 'areaResultado', 'secaoMeusPedidos'].forEach((id) => document.getElementById(id).classList.add('oculto'));
+        document.getElementById('areaBusca').classList.remove('oculto');
+        return;
+      }
       carregarTudo();
     }
 
