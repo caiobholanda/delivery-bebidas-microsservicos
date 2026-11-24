@@ -124,6 +124,7 @@ Para dinheiro, opcionalmente `{ "trocoPara": 50 }`.
 
 - Só maiores de 18 anos podem se cadastrar (400 caso contrário). E-mail repetido: 409. Login errado: 401.
 - Perfis: `cliente`, `entregador` e `administrador`. O cadastro público cria sempre `cliente`.
+- `POST /auth/entregadores` (só administrador, `Authorization: Bearer`) cria uma conta com perfil `entregador`. Corpo igual ao do cadastro: `{ "nome", "email", "senha", "dataNascimento" }`.
 - O `id` retornado é o `clienteId` usado nos serviços de Pedidos e Entregas.
 - O token vale por 24 horas.
 
@@ -210,10 +211,10 @@ aguardando_entregador → atribuida → em_rota → entregue
 
 | Método | Rota | Corpo |
 |---|---|---|
-| GET | `/entregadores?ativos=true` | |
+| GET | `/entregadores?ativos=true&email=` | |
 | GET | `/entregadores/{id}` | |
 | GET | `/entregadores/{id}/entregas` | |
-| POST | `/entregadores` | `{ "nome": "Carlos Souza", "telefone": "85999810021", "veiculo": "moto", "placa": "PMX1A23" }` |
+| POST | `/entregadores` | `{ "nome": "Carlos Souza", "email": "entregador@gmail.com", "telefone": "85999810021", "veiculo": "moto", "placa": "PMX1A23" }` |
 | PATCH | `/entregadores/{id}/status` | `{ "ativo": false }` |
 
 - `veiculo`: `moto`, `carro` ou `bicicleta`. Placa obrigatória para moto e carro.

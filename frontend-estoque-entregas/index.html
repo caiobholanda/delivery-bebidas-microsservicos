@@ -84,11 +84,15 @@
   <section id="secaoEntregadores">
     <h2>Entregadores</h2>
     <table>
-      <thead><tr><th>ID</th><th>Nome</th><th>Telefone</th><th>Veículo</th><th>Situação</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Nome</th><th>E-mail de acesso</th><th>Telefone</th><th>Veículo</th><th>Situação</th><th></th></tr></thead>
       <tbody id="entregadores"></tbody>
     </table>
     <h3>Cadastrar entregador</h3>
+    <p class="detalhe">O cadastro já cria a conta de acesso do entregador com o e-mail e a senha informados.</p>
     <input id="entNome" placeholder="Nome">
+    <input id="entEmail" type="email" placeholder="E-mail de acesso">
+    <input id="entSenha" type="password" placeholder="Senha (mín. 6)">
+    <label>Nascimento <input id="entNascimento" type="date"></label>
     <input id="entTelefone" placeholder="Telefone com DDD">
     <select id="entVeiculo">
       <option value="moto">Moto</option>
@@ -104,6 +108,7 @@
     const ESTOQUE_URL = 'https://estoque-service-vitor.onrender.com';
     const ENTREGAS_URL = 'https://entregas-service-vitor.onrender.com';
     const CATALOGO_URL = 'https://catalogo-service-joao.onrender.com';
+    const AUTENTICACAO_URL = 'https://autenticacao-service-joao.onrender.com';
 
     const NOMES_STATUS = {
       aguardando_entregador: 'Aguardando entregador',
@@ -117,6 +122,7 @@
     let nomesBebidas = {};
     let sessao = lerSessao();
     let entregadores = [];
+    let meuCadastro = null;
 
     const TELAS = {
       catalogo: 'https://delivery-bebidas-front-joao.onrender.com',
@@ -290,13 +296,19 @@
     }
 
     async function api(url, metodo = 'GET', corpo) {
+      const cabecalhos = { 'Content-Type': 'application/json' };
+      if (sessao && url.startsWith(AUTENTICACAO_URL)) cabecalhos.Authorization = `Bearer ${sessao.token}`;
       const resposta = await fetch(url, {
         method: metodo,
-        headers: { 'Content-Type': 'application/json' },
+        headers: cabecalhos,
         body: corpo ? JSON.stringify(corpo) : undefined
       });
       const dados = await resposta.json().catch(() => ({}));
-      if (!resposta.ok) throw new Error(dados.erro || 'Erro na requisição');
+      if (!resposta.ok) {
+        const erro = new Error(dados.erro || 'Erro na requisição');
+        erro.status = resposta.status;
+        throw erro;
+      }
       return dados;
     }
 
@@ -390,6 +402,7 @@
         linha.innerHTML = `
           <td>${entregador.id}</td>
           <td>${texto(entregador.nome)}</td>
+          <td>${texto(entregador.email || 'sem conta vinculada')}</td>
           <td>${texto(entregador.telefone)}</td>
           <td>${entregador.veiculo}${entregador.placa ? ' - ' + texto(entregador.placa) : ''}</td>
           <td>${situacao}</td>
@@ -400,7 +413,7 @@
 
     async function listarEntregas() {
       const status = document.getElementById('filtroStatus').value;
-      const entregas = await api(`${ENTREGAS_URL}/entregas${status ? '?status=' + status : ''}`);
+      const entregas = await buscarEntregas(status);
       const corpo = document.getElementById('entregas');
       corpo.innerHTML = '';
       entregas.forEach((entrega) => {
@@ -416,6 +429,20 @@
           <td>${acoesEntrega(entrega)}</td>`;
         corpo.appendChild(linha);
       });
+    }
+
+    async function buscarEntregas(status) {
+      if (perfilAtual() !== 'entregador') return api(`${ENTREGAS_URL}/entregas${status ? '?status=' + status : ''}`);
+      if (!meuCadastro) {
+        const encontrados = await api(`${ENTREGAS_URL}/entregadores?email=${encodeURIComponent(sessao.usuario.email)}`);
+        meuCadastro = encontrados[0] || null;
+      }
+      if (!meuCadastro) {
+        throw new Error(`O e-mail ${sessao.usuario.email} não está ligado a nenhum entregador. Peça ao administrador para cadastrar você com este e-mail.`);
+      }
+      document.getElementById('tituloEntregas').textContent = `Entregas de ${meuCadastro.nome}`;
+      const minhas = await api(`${ENTREGAS_URL}/entregadores/${meuCadastro.id}/entregas`);
+      return status ? minhas.filter((entrega) => entrega.status === status) : minhas;
     }
 
     function carregarEntregas() {
@@ -460,18 +487,52 @@
       }, `Falha registrada na entrega #${id}`);
     }
 
+    function validarEntregador(dados) {
+      if (!dados.nome) return 'Informe o nome do entregador';
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(dados.email)) return 'Informe um e-mail válido para o entregador entrar no sistema';
+      if (dados.senha.length < 6) return 'A senha precisa ter pelo menos 6 caracteres';
+      if (!dados.dataNascimento) return 'Informe a data de nascimento';
+      if (![10, 11].includes(dados.telefone.replace(/\D/g, '').length)) return 'Telefone deve ter DDD e 8 ou 9 dígitos';
+      if (dados.veiculo !== 'bicicleta' && !dados.placa) return 'Informe a placa do veículo';
+      return '';
+    }
+
     function cadastrarEntregador() {
+      const valor = (campo) => document.getElementById(campo).value.trim();
+      const dados = {
+        nome: valor('entNome'),
+        email: valor('entEmail').toLowerCase(),
+        senha: document.getElementById('entSenha').value,
+        dataNascimento: valor('entNascimento'),
+        telefone: valor('entTelefone'),
+        veiculo: valor('entVeiculo'),
+        placa: valor('entPlaca')
+      };
+      const problema = validarEntregador(dados);
+      if (problema) {
+        mostrarMensagem(problema, 'erro');
+        return;
+      }
       executar(async () => {
+        let contaJaExistia = false;
+        try {
+          await api(`${AUTENTICACAO_URL}/auth/entregadores`, 'POST', {
+            nome: dados.nome, email: dados.email, senha: dados.senha, dataNascimento: dados.dataNascimento
+          });
+        } catch (erro) {
+          if (erro.status !== 409) throw erro;
+          contaJaExistia = true;
+        }
         await api(`${ENTREGAS_URL}/entregadores`, 'POST', {
-          nome: document.getElementById('entNome').value,
-          telefone: document.getElementById('entTelefone').value,
-          veiculo: document.getElementById('entVeiculo').value,
-          placa: document.getElementById('entPlaca').value
+          nome: dados.nome, email: dados.email, telefone: dados.telefone, veiculo: dados.veiculo, placa: dados.placa
         });
-        ['entNome', 'entTelefone', 'entPlaca'].forEach((campo) => { document.getElementById(campo).value = ''; });
+        ['entNome', 'entEmail', 'entSenha', 'entNascimento', 'entTelefone', 'entPlaca'].forEach((campo) => { document.getElementById(campo).value = ''; });
         await carregarEntregadores();
         await listarEntregas();
-      }, 'Entregador cadastrado');
+        mostrarMensagem(contaJaExistia
+          ? `Entregador cadastrado e ligado à conta que já existia (${dados.email})`
+          : `Entregador cadastrado. Ele já pode entrar com ${dados.email}`, 'ok');
+      });
     }
 
     function alterarAtivo(id, ativo) {

@@ -29,6 +29,18 @@ public class AutenticacaoService {
     }
 
     public UsuarioResposta cadastrarCliente(CadastroRequest dados) {
+        return cadastrar(dados, "cliente");
+    }
+
+    public UsuarioResposta cadastrarEntregador(String cabecalho, CadastroRequest dados) {
+        UsuarioRegistro usuario = usuarioDoToken(cabecalho);
+        if (!"administrador".equals(usuario.perfil())) {
+            throw new ErroHttp(403, "Apenas o administrador pode cadastrar entregadores");
+        }
+        return cadastrar(dados, "entregador");
+    }
+
+    private UsuarioResposta cadastrar(CadastroRequest dados, String perfil) {
         if (dados == null) throw new ErroHttp(400, "Corpo da requisição inválido");
 
         String nome = textoObrigatorio(dados.nome(), "Informe o nome");
@@ -42,7 +54,7 @@ public class AutenticacaoService {
             throw new ErroHttp(400, "O cadastro é permitido apenas para maiores de 18 anos");
         }
 
-        return criarUsuario(nome, email, senha, nascimento, "cliente");
+        return criarUsuario(nome, email, senha, nascimento, perfil);
     }
 
     public void criarAdministradorSeNaoExistir(String email, String senha) {

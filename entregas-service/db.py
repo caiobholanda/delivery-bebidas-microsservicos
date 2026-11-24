@@ -29,3 +29,16 @@ def iniciar_banco():
         for comando in sql.split(";"):
             if comando.strip():
                 conexao.execute(text(comando))
+        vincular_email_dos_entregadores(conexao)
+
+
+def vincular_email_dos_entregadores(conexao):
+    if not conexao.execute(text("SHOW COLUMNS FROM entregadores LIKE 'email'")).first():
+        conexao.execute(text("ALTER TABLE entregadores ADD COLUMN email VARCHAR(160) NULL"))
+    if not conexao.execute(text("SHOW INDEX FROM entregadores WHERE Column_name = 'email'")).first():
+        conexao.execute(text("CREATE UNIQUE INDEX uq_entregadores_email ON entregadores (email)"))
+    conta_teste = "entregador@gmail.com"
+    if not conexao.execute(text("SELECT id FROM entregadores WHERE email = :email"), {"email": conta_teste}).first():
+        conexao.execute(
+            text("UPDATE entregadores SET email = :email WHERE id = 1 AND email IS NULL"), {"email": conta_teste}
+        )

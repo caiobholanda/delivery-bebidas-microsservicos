@@ -36,6 +36,12 @@ public class AutenticacaoController {
         return ResponseEntity.status(HttpStatus.CREATED).body(servico.cadastrarCliente(dados));
     }
 
+    @PostMapping("/auth/entregadores")
+    public ResponseEntity<UsuarioResposta> cadastrarEntregador(@RequestHeader(value = "Authorization", required = false) String autorizacao,
+                                                               @RequestBody CadastroRequest dados) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(servico.cadastrarEntregador(autorizacao, dados));
+    }
+
     @PostMapping("/auth/login")
     public LoginResposta login(@RequestBody LoginRequest dados) {
         return servico.login(dados);

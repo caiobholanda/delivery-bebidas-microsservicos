@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS entregadores (
   id INT AUTO_INCREMENT PRIMARY KEY,
   nome VARCHAR(120) NOT NULL,
+  email VARCHAR(160) NULL UNIQUE,
   telefone VARCHAR(20) NOT NULL,
   veiculo ENUM('moto', 'carro', 'bicicleta') NOT NULL,
   placa VARCHAR(10) NULL,

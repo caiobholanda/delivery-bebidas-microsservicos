@@ -2,6 +2,7 @@ import re
 
 from fastapi import APIRouter, Body
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from db import engine
 from erros import ErroHttp, inteiro
@@ -10,6 +11,7 @@ from routes.entregas import CONSULTA as CONSULTA_ENTREGAS, formatar_entrega
 router = APIRouter(prefix="/entregadores")
 
 VEICULOS = ["moto", "carro", "bicicleta"]
+EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 CONSULTA = """SELECT d.*,
                 (SELECT COUNT(*) FROM entregas e WHERE e.entregador_id = d.id AND e.status = 'atribuida') AS pendentes,
@@ -21,6 +23,7 @@ def formatar_entregador(linha):
     return {
         "id": linha.id,
         "nome": linha.nome,
+        "email": linha.email,
         "telefone": linha.telefone,
         "veiculo": linha.veiculo,
         "placa": linha.placa,
@@ -46,22 +49,31 @@ def buscar_entregador(conexao, entregador_id):
 
 
 @router.get("")
-def listar(ativos: bool = False):
-    sql = CONSULTA + (" WHERE d.ativo = TRUE" if ativos else "") + " ORDER BY d.nome"
+def listar(ativos: bool = False, email: str | None = None):
+    filtros, parametros = [], {}
+    if ativos:
+        filtros.append("d.ativo = TRUE")
+    if email:
+        filtros.append("d.email = :email")
+        parametros["email"] = email.strip().lower()
+    sql = CONSULTA + (" WHERE " + " AND ".join(filtros) if filtros else "") + " ORDER BY d.nome"
     with engine.connect() as conexao:
-        return [formatar_entregador(linha) for linha in conexao.execute(text(sql))]
+        return [formatar_entregador(linha) for linha in conexao.execute(text(sql), parametros)]
 
 
 @router.post("", status_code=201)
 def cadastrar(dados: dict | None = Body(None)):
     dados = dados or {}
     nome = str(dados.get("nome") or "").strip()
+    email = str(dados.get("email") or "").strip().lower()
     telefone = re.sub(r"\D", "", str(dados.get("telefone") or ""))
     veiculo = dados.get("veiculo")
     placa = str(dados.get("placa") or "").strip().upper().replace("-", "") or None
 
     if not nome:
         raise ErroHttp(400, "Informe o nome do entregador")
+    if not EMAIL.match(email):
+        raise ErroHttp(400, "Informe o e-mail que o entregador usa para entrar no sistema")
     if len(telefone) not in (10, 11):
         raise ErroHttp(400, "Telefone deve ter DDD e 8 ou 9 dígitos")
     if veiculo not in VEICULOS:
@@ -71,15 +83,24 @@ def cadastrar(dados: dict | None = Body(None)):
     if placa and not re.fullmatch(r"[A-Z]{3}[0-9][A-Z0-9][0-9]{2}", placa):
         raise ErroHttp(400, "Placa inválida")
 
-    with engine.begin() as conexao:
-        resultado = conexao.execute(
-            text(
-                """INSERT INTO entregadores (nome, telefone, veiculo, placa)
-                   VALUES (:nome, :telefone, :veiculo, :placa)"""
-            ),
-            {"nome": nome[:120], "telefone": telefone, "veiculo": veiculo, "placa": placa if veiculo != "bicicleta" else None},
-        )
-        return formatar_entregador(buscar_entregador(conexao, resultado.lastrowid))
+    try:
+        with engine.begin() as conexao:
+            resultado = conexao.execute(
+                text(
+                    """INSERT INTO entregadores (nome, email, telefone, veiculo, placa)
+                       VALUES (:nome, :email, :telefone, :veiculo, :placa)"""
+                ),
+                {
+                    "nome": nome[:120],
+                    "email": email[:160],
+                    "telefone": telefone,
+                    "veiculo": veiculo,
+                    "placa": placa if veiculo != "bicicleta" else None,
+                },
+            )
+            return formatar_entregador(buscar_entregador(conexao, resultado.lastrowid))
+    except IntegrityError:
+        raise ErroHttp(409, "Já existe um entregador com este e-mail")
 
 
 @router.get("/{entregador_id}")
