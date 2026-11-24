@@ -17,9 +17,11 @@
     .oculto { display: none; }
     .antigo { text-decoration: line-through; color: #888; }
     .promo { color: #2e7d32; font-weight: bold; }
-    #mensagem { padding: 10px; border-radius: 4px; display: none; }
-    #mensagem.erro { display: block; background: #fdecea; color: #c0392b; }
-    #mensagem.ok { display: block; background: #e8f5e9; color: #2e7d32; }
+    #mensagem { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 900; min-width: 280px; max-width: 90%; padding: 14px 44px 14px 18px; border-radius: 8px; font-size: 16px; font-weight: bold; box-shadow: 0 6px 20px rgba(0,0,0,.3); display: none; }
+    #mensagem.erro { display: block; background: #c0392b; color: #fff; }
+    #mensagem.ok { display: block; background: #2e7d32; color: #fff; }
+    #mensagem.aguarde { display: block; background: #1d4e89; color: #fff; }
+    #mensagem button { position: absolute; top: 6px; right: 8px; background: none; border: none; color: #fff; font-size: 22px; cursor: pointer; padding: 0 4px; margin: 0; }
     nav#menu { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; background: #fff; padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
     a.botao { display: inline-block; padding: 8px 14px; margin: 2px 6px 2px 0; background: #e8eef6; color: #1d4e89; border-radius: 4px; text-decoration: none; }
     a.botao.atual { background: #1d4e89; color: #fff; }
@@ -252,10 +254,22 @@
       return div.innerHTML;
     }
 
+    let temporizadorMensagem;
+
     function mostrarMensagem(mensagem, tipo) {
       const caixa = document.getElementById('mensagem');
-      caixa.textContent = mensagem;
-      caixa.className = tipo;
+      const aguardando = tipo === 'ok' && mensagem.endsWith('...');
+      const classe = aguardando ? 'aguarde' : tipo;
+      const icone = { erro: '&#9888;', ok: '&#10004;', aguarde: '&#8987;' }[classe] || '';
+      caixa.innerHTML = `<span style="margin-right:8px;">${icone}</span><span></span><button onclick="fecharMensagem()" title="Fechar">&times;</button>`;
+      caixa.children[1].textContent = mensagem;
+      caixa.className = classe;
+      clearTimeout(temporizadorMensagem);
+      if (!aguardando) temporizadorMensagem = setTimeout(fecharMensagem, tipo === 'erro' ? 8000 : 4000);
+    }
+
+    function fecharMensagem() {
+      document.getElementById('mensagem').className = '';
     }
 
     async function api(url, metodo = 'GET', corpo) {

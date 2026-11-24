@@ -70,24 +70,22 @@ async function cancelarEntregaDoPedido(pedidoId) {
   }
 }
 
-async function salvarPedido(clienteId, carrinho, formaPagamento, endereco) {
+async function inserirPedido(clienteId, carrinho, formaPagamento, endereco) {
   const conexao = await pool.getConnection();
   try {
     await conexao.beginTransaction();
-    const [resultado] = await conexao.query(
-      `INSERT INTO pedidos (cliente_id, status, subtotal, desconto, total, cupom_codigo, forma_pagamento, endereco)
-       VALUES (?, 'aguardando_pagamento', ?, ?, ?, ?, ?, ?)`,
-      [clienteId, carrinho.subtotal, carrinho.desconto, carrinho.total, carrinho.cupom, formaPagamento, endereco]
+    const [[{ proximo }]] = await conexao.query('SELECT COALESCE(MAX(id), 0) + 1 AS proximo FROM pedidos FOR UPDATE');
+    await conexao.query(
+      `INSERT INTO pedidos (id, cliente_id, status, subtotal, desconto, total, cupom_codigo, forma_pagamento, endereco)
+       VALUES (?, ?, 'aguardando_pagamento', ?, ?, ?, ?, ?, ?)`,
+      [proximo, clienteId, carrinho.subtotal, carrinho.desconto, carrinho.total, carrinho.cupom, formaPagamento, endereco]
     );
-    const pedidoId = resultado.insertId;
-    for (const item of carrinho.itens) {
-      await conexao.query(
-        'INSERT INTO itens_pedido (pedido_id, bebida_id, nome, preco_unitario, quantidade) VALUES (?, ?, ?, ?, ?)',
-        [pedidoId, item.bebidaId, item.nome, item.precoUnitario, item.quantidade]
-      );
-    }
+    await conexao.query(
+      'INSERT INTO itens_pedido (pedido_id, bebida_id, nome, preco_unitario, quantidade) VALUES ?',
+      [carrinho.itens.map((item) => [proximo, item.bebidaId, item.nome, item.precoUnitario, item.quantidade])]
+    );
     await conexao.commit();
-    return pedidoId;
+    return proximo;
   } catch (erro) {
     await conexao.rollback();
     throw erro;
@@ -95,6 +93,23 @@ async function salvarPedido(clienteId, carrinho, formaPagamento, endereco) {
     conexao.release();
   }
 }
+
+async function salvarPedido(clienteId, carrinho, formaPagamento, endereco) {
+  for (let tentativa = 1; ; tentativa++) {
+    try {
+      return await inserirPedido(clienteId, carrinho, formaPagamento, endereco);
+    } catch (erro) {
+      if (erro.code !== 'ER_DUP_ENTRY' || tentativa === 3) throw erro;
+    }
+  }
+}
+
+async function removerPedido(pedidoId) {
+  await pool.query('DELETE FROM itens_pedido WHERE pedido_id = ?', [pedidoId]);
+  await pool.query('DELETE FROM pedidos WHERE id = ?', [pedidoId]);
+}
+
+const clientesFinalizando = new Set();
 
 async function limparCarrinho(carrinhoId) {
   await Promise.all([
@@ -110,21 +125,23 @@ router.post('/', async (req, res) => {
   if (!FORMAS_PAGAMENTO.includes(formaPagamento)) throw erroHttp(400, 'Forma de pagamento deve ser pix, cartao ou dinheiro');
   if (!endereco || !String(endereco).trim()) throw erroHttp(400, 'Informe o endereço de entrega');
 
+  if (clientesFinalizando.has(idCliente)) {
+    throw erroHttp(409, 'Seu pedido já está sendo processado. Aguarde.');
+  }
+  clientesFinalizando.add(idCliente);
+  try {
+    res.status(201).json(await finalizarPedido(idCliente, formaPagamento, String(endereco).trim(), cartao, trocoPara));
+  } finally {
+    clientesFinalizando.delete(idCliente);
+  }
+});
+
+async function finalizarPedido(idCliente, formaPagamento, endereco, cartao, trocoPara) {
   const carrinho = await montarCarrinho(idCliente);
   if (!carrinho.itens.length) throw erroHttp(400, 'Carrinho vazio');
   if (carrinho.cupom) await validarCupomParaCarrinho(carrinho.cupom, carrinho.subtotal);
 
-  const pedidoId = await salvarPedido(idCliente, carrinho, formaPagamento, String(endereco).trim());
-
-  try {
-    await externos.baixarEstoque(pedidoId, carrinho.itens.map((item) => ({
-      bebida_id: item.bebidaId,
-      quantidade: item.quantidade
-    })));
-  } catch (erro) {
-    await atualizarStatus(pedidoId, 'cancelado');
-    throw erroHttp(erro.status === 409 ? 409 : 502, `Não foi possível reservar o estoque: ${erro.message}`);
-  }
+  const pedidoId = await salvarPedido(idCliente, carrinho, formaPagamento, endereco);
 
   let pagamento;
   try {
@@ -136,15 +153,24 @@ router.post('/', async (req, res) => {
       trocoPara
     });
   } catch (erro) {
-    await externos.restaurarEstoque(pedidoId).catch(() => {});
-    await atualizarStatus(pedidoId, 'cancelado');
+    await removerPedido(pedidoId);
     throw erroHttp(erro.status === 400 ? 400 : 502, `Falha no pagamento: ${erro.message}`);
   }
 
   if (pagamento.status === 'recusado') {
-    await externos.restaurarEstoque(pedidoId).catch(() => {});
-    await atualizarStatus(pedidoId, 'cancelado', pagamento.id);
-    throw erroHttp(402, 'Pagamento recusado');
+    await removerPedido(pedidoId);
+    throw erroHttp(402, 'Pagamento recusado. Confira os dados do cartão ou escolha outra forma de pagamento.');
+  }
+
+  try {
+    await externos.baixarEstoque(pedidoId, carrinho.itens.map((item) => ({
+      bebida_id: item.bebidaId,
+      quantidade: item.quantidade
+    })));
+  } catch (erro) {
+    await externos.estornarPagamento(pagamento.id).catch(() => {});
+    await removerPedido(pedidoId);
+    throw erroHttp(erro.status === 409 ? 409 : 502, `Não foi possível reservar o estoque: ${erro.message}`);
   }
 
   const confirmado = pagamento.status === 'aprovado' || formaPagamento === 'dinheiro';
@@ -154,8 +180,8 @@ router.post('/', async (req, res) => {
   const { pedido, itens } = await buscarPedido(pedidoId);
   if (confirmado) await solicitarEntrega(pedido);
 
-  res.status(201).json({ pedido: formatarPedido(pedido, itens), pagamento });
-});
+  return { pedido: formatarPedido(pedido, itens), pagamento };
+}
 
 router.get('/cliente/:clienteId', async (req, res) => {
   const clienteId = idValido(req.params.clienteId);
