@@ -39,7 +39,7 @@ module.exports = {
   ],
   paths: {
     '/health': {
-      get: { tags: ['Sistema'], summary: 'Verifica se o serviço está no ar', responses: { 200: { description: 'Serviço no ar' } } }
+      get: { tags: ['Sistema'], summary: 'Verifica se o serviço e o banco de dados estão funcionando', responses: { 200: { description: 'Serviço e banco funcionando' }, 503: { description: 'Banco de dados indisponível' } } }
     },
     '/carrinho/{clienteId}': {
       get: { tags: ['Carrinho'], summary: 'Mostra o carrinho com subtotal, desconto e total', parameters: [clienteId], responses: { 200: carrinho, 400: erro } }

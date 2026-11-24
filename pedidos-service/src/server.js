@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const documentacao = require('./docs');
-const { iniciarBanco } = require('./db');
+const { pool, iniciarBanco } = require('./db');
 const carrinhoRoutes = require('./routes/carrinho');
 const pedidosRoutes = require('./routes/pedidos');
 
@@ -11,8 +11,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/health', (req, res) => {
-  res.json({ servico: 'pedidos', status: 'ok' });
+app.get('/health', async (req, res) => {
+  const inicio = Date.now();
+  try {
+    await pool.query('SELECT 1');
+    res.json({ servico: 'pedidos', status: 'ok', banco: 'ok', tempoBancoMs: Date.now() - inicio, ativoHaSegundos: Math.round(process.uptime()) });
+  } catch (erro) {
+    res.status(503).json({ servico: 'pedidos', status: 'erro', banco: 'indisponível' });
+  }
 });
 
 app.get('/docs.json', (req, res) => res.json(documentacao));
