@@ -18,6 +18,8 @@ import com.delivery.catalogo.Dtos.Bebida;
 @Repository
 public class BebidaRepository {
 
+    private static final String NAO_REMOVIDA = "id NOT IN (SELECT bebida_id FROM bebidas_removidas)";
+
     private static final String PRECO_FINAL = "COALESCE(preco_promocional, preco)";
 
     private static final RowMapper<Bebida> MAPEADOR = (rs, linha) -> new Bebida(
@@ -37,7 +39,7 @@ public class BebidaRepository {
 
     public List<Bebida> listar(String busca, String categoria, BigDecimal precoMin, BigDecimal precoMax,
                                boolean somenteDestaques, boolean somentePromocoes, String ordem) {
-        StringBuilder sql = new StringBuilder("SELECT * FROM bebidas WHERE 1 = 1");
+        StringBuilder sql = new StringBuilder("SELECT * FROM bebidas WHERE " + NAO_REMOVIDA);
         List<Object> argumentos = new ArrayList<>();
 
         if (busca != null && !busca.isBlank()) {
@@ -65,11 +67,11 @@ public class BebidaRepository {
     }
 
     public Optional<Bebida> buscarPorId(int id) {
-        return jdbc.query("SELECT * FROM bebidas WHERE id = ?", MAPEADOR, id).stream().findFirst();
+        return jdbc.query("SELECT * FROM bebidas WHERE id = ? AND " + NAO_REMOVIDA, MAPEADOR, id).stream().findFirst();
     }
 
     public List<String> listarCategorias() {
-        return jdbc.queryForList("SELECT DISTINCT categoria FROM bebidas ORDER BY categoria", String.class);
+        return jdbc.queryForList("SELECT DISTINCT categoria FROM bebidas WHERE " + NAO_REMOVIDA + " ORDER BY categoria", String.class);
     }
 
     public int inserir(String nome, String categoria, String descricao, BigDecimal preco,
@@ -94,6 +96,10 @@ public class BebidaRepository {
                           BigDecimal precoPromocional, boolean destaque) {
         jdbc.update("UPDATE bebidas SET nome = ?, categoria = ?, descricao = ?, preco = ?, preco_promocional = ?, destaque = ? WHERE id = ?",
                 nome, categoria, descricao, preco, precoPromocional, destaque, id);
+    }
+
+    public void remover(int id) {
+        jdbc.update("INSERT IGNORE INTO bebidas_removidas (bebida_id) VALUES (?)", id);
     }
 
     private static String clausulaOrdem(String ordem) {

@@ -24,3 +24,8 @@ INSERT IGNORE INTO bebidas (id, nome, categoria, descricao, preco, preco_promoci
   (10, 'Vodka Smirnoff 998ml', 'Destilado', 'Vodka tradicional', 39.90, NULL, FALSE),
   (11, 'Whisky Red Label 1L', 'Destilado', 'Blended scotch whisky', 99.90, 89.90, TRUE),
   (12, 'Red Bull 250ml', 'Energético', 'Lata de 250ml', 9.50, NULL, FALSE);
+
+CREATE TABLE IF NOT EXISTS bebidas_removidas (
+  bebida_id INT PRIMARY KEY,
+  removido_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

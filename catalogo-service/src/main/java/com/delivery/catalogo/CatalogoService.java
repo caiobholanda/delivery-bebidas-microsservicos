@@ -48,6 +48,11 @@ public class CatalogoService {
         return buscarPorId(id);
     }
 
+    public void remover(int id) {
+        buscarPorId(id);
+        repositorio.remover(id);
+    }
+
     private static String descricao(BebidaRequest dados) {
         return dados.descricao() == null || dados.descricao().isBlank() ? null : dados.descricao().trim();
     }

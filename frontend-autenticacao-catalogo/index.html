@@ -81,7 +81,7 @@
   </section>
 
   <section id="areaAdmin" class="oculto">
-    <h2>Administrador: cadastrar ou editar bebida</h2>
+    <h2 id="tituloAdmin">Administrador: cadastrar nova bebida</h2>
     <input type="number" id="admId" placeholder="ID (vazio para nova)" min="1" style="width:150px">
     <input id="admNome" placeholder="Nome">
     <input id="admCategoria" placeholder="Categoria">
@@ -90,6 +90,7 @@
     <input type="number" id="admPromo" placeholder="Promocional" min="0" step="0.01" style="width:110px">
     <label><input type="checkbox" id="admDestaque"> Destaque</label>
     <button onclick="salvarBebida()">Salvar</button>
+    <button class="secundario" id="botaoCancelarEdicao" style="display:none" onclick="limparFormularioBebida()">Cancelar edição</button>
   </section>
 
   <script>
@@ -404,6 +405,7 @@
         return;
       }
       bebidas.forEach((bebida) => {
+        nomesNoCatalogo[bebida.id] = bebida.nome;
         const preco = bebida.precoPromocional
           ? `<span class="antigo">${dinheiro(bebida.preco)}</span> <span class="promo">${dinheiro(bebida.precoPromocional)}</span>`
           : dinheiro(bebida.preco);
@@ -416,7 +418,8 @@
           <td>
             ${podeComprar() ? `<input type="number" id="qtd${bebida.id}" value="1" min="1" style="width:55px">
             <button onclick="adicionarAoCarrinho(${bebida.id})">Adicionar</button>` : ''}
-            ${sessao && sessao.usuario.perfil === 'administrador' ? `<button class="secundario" onclick="editarBebida(${bebida.id})">Editar</button>` : ''}
+            ${sessao && sessao.usuario.perfil === 'administrador' ? `<button class="secundario" onclick="editarBebida(${bebida.id})">Editar</button>
+            <button class="perigo" onclick="excluirBebida(${bebida.id})">Excluir</button>` : ''}
           </td>`;
         corpo.appendChild(linha);
       });
@@ -477,8 +480,35 @@
         document.getElementById('admPreco').value = bebida.preco;
         document.getElementById('admPromo').value = bebida.precoPromocional || '';
         document.getElementById('admDestaque').checked = bebida.destaque;
-        document.getElementById('areaAdmin').scrollIntoView();
+        document.getElementById('tituloAdmin').textContent = `Administrador: editando "${bebida.nome}" (ID ${bebida.id})`;
+        document.getElementById('botaoCancelarEdicao').style.display = 'inline-block';
+        document.getElementById('areaAdmin').scrollIntoView({ behavior: 'smooth' });
+        document.getElementById('admNome').focus();
+        mostrarMensagem(`Editando ${bebida.nome}. Altere os campos e clique em Salvar.`, 'ok');
       });
+    }
+
+    const nomesNoCatalogo = {};
+
+    function limparFormularioBebida() {
+      ['admId', 'admNome', 'admCategoria', 'admDescricao', 'admPreco', 'admPromo'].forEach((campo) => {
+        document.getElementById(campo).value = '';
+      });
+      document.getElementById('admDestaque').checked = false;
+      document.getElementById('tituloAdmin').textContent = 'Administrador: cadastrar nova bebida';
+      document.getElementById('botaoCancelarEdicao').style.display = 'none';
+    }
+
+    function excluirBebida(id) {
+      const nome = nomesNoCatalogo[id] || `bebida ${id}`;
+      if (!confirm(`Excluir "${nome}" do catálogo? Os pedidos já feitos continuam com o registro dela.`)) return;
+      executar(async () => {
+        await api(`${CATALOGO_URL}/bebidas/${id}`, 'DELETE');
+        Object.keys(sessionStorage).filter((chave) => chave.startsWith('cacheBebidas:')).forEach((chave) => sessionStorage.removeItem(chave));
+        mostrarMensagem(`"${nome}" foi excluída do catálogo.`, 'ok');
+        document.getElementById('categoria').length = 1;
+        listarBebidas();
+      }, 'Excluindo...');
     }
 
     function salvarBebida() {
@@ -497,10 +527,8 @@
           ? await api(`${CATALOGO_URL}/bebidas/${id}`, 'PUT', corpo)
           : await api(`${CATALOGO_URL}/bebidas`, 'POST', corpo);
         mostrarMensagem(`Bebida salva (ID ${bebida.id}).`, 'ok');
-        ['admId', 'admNome', 'admCategoria', 'admDescricao', 'admPreco', 'admPromo'].forEach((campo) => {
-          document.getElementById(campo).value = '';
-        });
-        document.getElementById('admDestaque').checked = false;
+        limparFormularioBebida();
+        Object.keys(sessionStorage).filter((chave) => chave.startsWith('cacheBebidas:')).forEach((chave) => sessionStorage.removeItem(chave));
         document.getElementById('categoria').length = 1;
         listarBebidas();
       });
