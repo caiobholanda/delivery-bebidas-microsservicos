@@ -36,8 +36,10 @@
 
   <section id="semAcesso" class="oculto">
     <h2>Área restrita</h2>
-    <p>Estoque e entregas são acessados por administradores e entregadores. Entre com uma conta desse tipo na tela do catálogo.</p>
+    <p>Estoque e entregas são acessados por administradores e entregadores.</p>
+    <p id="contaAtual"></p>
     <a class="botao atual" id="linkEntrar" href="#">Ir para o login</a>
+    <button id="botaoTrocarConta" class="oculto" onclick="sairDeTodas()">Entrar com outra conta</button>
   </section>
 
   <div id="conteudo" class="oculto">
@@ -236,7 +238,7 @@
         ['catalogo', 'Catálogo'],
         ['pedidos', quantidadeCarrinho ? `Carrinho e pedidos (${quantidadeCarrinho})` : 'Carrinho e pedidos']
       ];
-      if (podeOperar()) itens.push(['operacao', 'Estoque e entregas']);
+      itens.push(['operacao', 'Estoque e entregas']);
       const links = itens
         .map(([tela, nome]) => `<a class="botao${tela === atual ? ' atual' : ''}" href="${linkTela(tela)}">${nome}</a>`)
         .join('');
@@ -462,6 +464,11 @@
       carregarEntregas();
     } else {
       document.getElementById('semAcesso').classList.remove('oculto');
+      if (sessao) {
+        document.getElementById('contaAtual').textContent = `Você entrou como ${sessao.usuario.nome} (${sessao.usuario.perfil}). Para ver esta tela, entre com uma conta de administrador ou entregador.`;
+        document.getElementById('linkEntrar').classList.add('oculto');
+        document.getElementById('botaoTrocarConta').classList.remove('oculto');
+      }
     }
   </script>
 </body>

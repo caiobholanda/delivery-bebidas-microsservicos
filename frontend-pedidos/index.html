@@ -266,7 +266,7 @@
         ['catalogo', 'Catálogo'],
         ['pedidos', quantidadeCarrinho ? `Carrinho e pedidos (${quantidadeCarrinho})` : 'Carrinho e pedidos']
       ];
-      if (podeOperar()) itens.push(['operacao', 'Estoque e entregas']);
+      itens.push(['operacao', 'Estoque e entregas']);
       const links = itens
         .map(([tela, nome]) => `<a class="botao${tela === atual ? ' atual' : ''}" href="${linkTela(tela)}">${nome}</a>`)
         .join('');
