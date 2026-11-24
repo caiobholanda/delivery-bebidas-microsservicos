@@ -21,12 +21,12 @@ function corpo(schema, exemplo) {
   return { required: true, content: { 'application/json': { schema, example: exemplo } } };
 }
 
-module.exports = {
+const documentacao = {
   openapi: '3.0.3',
   info: {
     title: 'Serviço de Pedidos',
     version: '1.0.0',
-    description: 'Carrinho, cupons, finalização, consulta e cancelamento de pedidos do delivery de bebidas. Consome os serviços de Catálogo, Estoque, Pagamento e Entregas.'
+    description: 'Carrinho, cupons, finalização, consulta e cancelamento de pedidos do delivery de bebidas. Consome os serviços de Catálogo, Estoque, Pagamento, Entregas e Autenticação. Carrinho e compra: só clientes, cada um com os seus dados. Consulta de pedidos de qualquer cliente: administrador. A rota de status é interna, usada pelos serviços de Pagamento e Entregas.'
   },
   servers: [
     { url: 'https://pedidos-service-caio.onrender.com', description: 'Render' },
@@ -120,6 +120,9 @@ module.exports = {
     }
   },
   components: {
+    securitySchemes: {
+      bearer: { type: 'http', scheme: 'bearer', description: 'Token recebido no login do serviço de Autenticação' }
+    },
     schemas: {
       Erro: { type: 'object', properties: { erro: { type: 'string', example: 'Carrinho vazio' } } },
       Item: {
@@ -152,3 +155,16 @@ module.exports = {
     }
   }
 };
+
+const ROTAS_ABERTAS = ['/health', '/pedidos/{id}/status'];
+
+Object.entries(documentacao.paths).forEach(([caminho, metodos]) => {
+  if (ROTAS_ABERTAS.includes(caminho)) return;
+  Object.values(metodos).forEach((operacao) => {
+    operacao.security = [{ bearer: [] }];
+    operacao.responses[401] = { description: 'Sem login ou sessão expirada' };
+    operacao.responses[403] = { description: 'Perfil sem acesso ou dados de outro cliente' };
+  });
+});
+
+module.exports = documentacao;

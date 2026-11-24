@@ -1,4 +1,5 @@
 const express = require('express');
+const { exigirPerfil, garantirDono } = require('../autenticacao');
 const { pool } = require('../db');
 const { erroHttp, idValido } = require('../erros');
 const { buscarBebida, consultarEstoque } = require('../servicosExternos');
@@ -6,9 +7,12 @@ const { obterCarrinhoId, montarCarrinho, validarCupomParaCarrinho } = require('.
 
 const router = express.Router();
 
+router.use(exigirPerfil('cliente'));
+
 function lerCliente(req) {
   const clienteId = idValido(req.params.clienteId);
   if (!clienteId) throw erroHttp(400, 'clienteId inválido');
+  garantirDono(req, clienteId);
   return clienteId;
 }
 

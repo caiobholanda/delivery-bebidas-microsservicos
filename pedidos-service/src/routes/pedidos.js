@@ -1,4 +1,5 @@
 const express = require('express');
+const { exigirPerfil, garantirDono } = require('../autenticacao');
 const { pool } = require('../db');
 const { erroHttp, idValido } = require('../erros');
 const externos = require('../servicosExternos');
@@ -118,10 +119,11 @@ async function limparCarrinho(carrinhoId) {
   ]);
 }
 
-router.post('/', async (req, res) => {
+router.post('/', exigirPerfil('cliente'), async (req, res) => {
   const { clienteId, formaPagamento, endereco, cartao, trocoPara } = req.body || {};
   const idCliente = idValido(clienteId);
   if (!idCliente) throw erroHttp(400, 'clienteId inválido');
+  garantirDono(req, idCliente);
   if (!FORMAS_PAGAMENTO.includes(formaPagamento)) throw erroHttp(400, 'Forma de pagamento deve ser pix, cartao ou dinheiro');
   if (!endereco || !String(endereco).trim()) throw erroHttp(400, 'Informe o endereço de entrega');
 
@@ -183,9 +185,10 @@ async function finalizarPedido(idCliente, formaPagamento, endereco, cartao, troc
   return { pedido: formatarPedido(pedido, itens), pagamento };
 }
 
-router.get('/cliente/:clienteId', async (req, res) => {
+router.get('/cliente/:clienteId', exigirPerfil('cliente', 'administrador'), async (req, res) => {
   const clienteId = idValido(req.params.clienteId);
   if (!clienteId) throw erroHttp(400, 'clienteId inválido');
+  garantirDono(req, clienteId);
 
   const [pedidos] = await pool.query(
     'SELECT * FROM pedidos WHERE cliente_id = ? ORDER BY criado_em DESC, id DESC',
@@ -194,17 +197,19 @@ router.get('/cliente/:clienteId', async (req, res) => {
   res.json(pedidos.map((pedido) => formatarPedido(pedido)));
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', exigirPerfil('cliente', 'administrador'), async (req, res) => {
   const id = idValido(req.params.id);
   if (!id) throw erroHttp(400, 'id inválido');
   const { pedido, itens } = await buscarPedido(id);
+  garantirDono(req, pedido.cliente_id);
   res.json(formatarPedido(pedido, itens));
 });
 
-router.patch('/:id/cancelar', async (req, res) => {
+router.patch('/:id/cancelar', exigirPerfil('cliente', 'administrador'), async (req, res) => {
   const id = idValido(req.params.id);
   if (!id) throw erroHttp(400, 'id inválido');
   const { pedido } = await buscarPedido(id);
+  garantirDono(req, pedido.cliente_id);
 
   if (!['aguardando_pagamento', 'confirmado'].includes(pedido.status)) {
     throw erroHttp(409, `Pedido com status "${pedido.status}" não pode ser cancelado`);
