@@ -1,26 +1,10 @@
 const { pool } = require('./db');
 const { erroHttp } = require('./erros');
-
-function arredondar(valor) {
-  return Math.round(valor * 100) / 100;
-}
+const { arredondar, motivoCupomInvalido, calcularDesconto } = require('./cupons');
 
 async function buscarCupom(codigo) {
   const [linhas] = await pool.query('SELECT * FROM cupons WHERE codigo = ?', [codigo]);
   return linhas[0] || null;
-}
-
-function motivoCupomInvalido(cupom, subtotal) {
-  if (!cupom || !cupom.ativo) return 'Cupom não encontrado';
-  if (cupom.validade && new Date(cupom.validade) < new Date(new Date().toDateString())) return 'Cupom vencido';
-  if (subtotal < cupom.valor_minimo) return `Cupom válido apenas para compras a partir de R$ ${cupom.valor_minimo.toFixed(2)}`;
-  return null;
-}
-
-function calcularDesconto(cupom, subtotal) {
-  if (!cupom || motivoCupomInvalido(cupom, subtotal)) return 0;
-  if (cupom.tipo === 'percentual') return arredondar(subtotal * cupom.valor / 100);
-  return Math.min(cupom.valor, subtotal);
 }
 
 async function obterCarrinhoId(clienteId) {
