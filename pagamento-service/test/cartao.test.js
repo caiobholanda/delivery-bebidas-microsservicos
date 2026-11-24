@@ -40,3 +40,7 @@ test('nome vazio gera erro 400', () => {
 test('sem dados do cartao gera erro 400', () => {
   assert.throws(() => validarCartao(undefined), { status: 400 });
 });
+
+test('cartao elo que comeca com 4 e reconhecido como elo', () => {
+  assert.strictEqual(validarCartao({ ...valido, numero: '4011780000000006' }).bandeira, 'elo');
+});

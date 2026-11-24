@@ -16,10 +16,10 @@ function luhnValido(numero) {
 }
 
 function identificarBandeira(numero) {
+  if (/^(4011|4312|4389|4514|4576|5041|5066|5067|6277|6362|6363|6504|6505|6516)/.test(numero)) return 'elo';
   if (numero.startsWith('4')) return 'visa';
   if (/^5[1-5]/.test(numero)) return 'mastercard';
   if (/^3[47]/.test(numero)) return 'amex';
-  if (/^(4011|4312|4389|4514|4576|5041|5066|5067|6277|6362|6363|6504|6505|6516)/.test(numero)) return 'elo';
   return 'outra';
 }
 

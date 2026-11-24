@@ -74,6 +74,8 @@ ou
 ```
 Transições permitidas: `confirmado → em_entrega → entregue`. Fora disso: 409.
 
+O Pedidos confere a mudança antes de aceitar: `confirmado` só com pagamento `aprovado` no serviço de Pagamento; `em_entrega` só com a entrega `atribuida` ou `em_rota`; `entregue` só com a entrega `em_rota`. Assim ninguém marca um pedido como pago ou entregue chamando a rota direto.
+
 Quando o status vira `entregue` e o pagamento é em dinheiro, o Pedidos confirma o pagamento automaticamente.
 
 ### Pagamento (Caio) → Pedidos
@@ -100,6 +102,10 @@ Para cartão, `POST /pedidos` também recebe:
 { "cartao": { "numero": "4111111111111111", "nome": "CAIO", "validade": "12/29", "cvv": "123" } }
 ```
 Para dinheiro, opcionalmente `{ "trocoPara": 50 }`.
+
+Ao finalizar, o Pedidos confere cada item no Catálogo. Se o preço mudou ou a bebida foi excluída, o carrinho é atualizado e a resposta é 409 explicando o que mudou.
+
+`PATCH /pedidos/{id}/cancelar` aceita pedidos `aguardando_pagamento` e `confirmado`, e também `em_entrega` quando a entrega está `falhou`.
 
 ### Front → Pagamento
 

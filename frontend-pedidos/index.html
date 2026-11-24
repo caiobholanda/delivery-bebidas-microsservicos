@@ -397,7 +397,7 @@
       if (guardada) return guardada;
       try {
         const entrega = await api(`${ENTREGAS_URL}/entregas/pedido/${pedidoId}`);
-        if (['entregue', 'cancelada', 'falhou'].includes(entrega.status)) guardarCache(`cacheEntrega:${pedidoId}`, entrega);
+        if (['entregue', 'cancelada'].includes(entrega.status)) guardarCache(`cacheEntrega:${pedidoId}`, entrega);
         return entrega;
       } catch (e) {
         return null;
@@ -443,6 +443,9 @@
         buscarEntrega(pedido.id).then((entrega) => {
           const celula = document.getElementById(idCelula);
           if (celula) celula.innerHTML = textoEntrega(pedido, entrega);
+          if (comAcoes && pedido.status === 'em_entrega' && entrega?.status === 'falhou') {
+            linha.lastElementChild.insertAdjacentHTML('beforeend', `<button class="perigo" onclick="cancelarPedido(${pedido.id})">Cancelar</button>`);
+          }
         });
       });
     }
@@ -571,9 +574,9 @@
         }
         area.innerHTML += '<p>Acompanhe a entrega em "Meus pedidos".</p>';
 
-        await carregarCarrinho();
         await carregarHistorico();
       }, 'Pedido finalizado').finally(() => {
+        carregarCarrinho().catch(() => {});
         botao.disabled = false;
         botao.textContent = 'Finalizar';
       });

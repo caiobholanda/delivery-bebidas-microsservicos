@@ -31,6 +31,7 @@ app.use((req, res) => {
 });
 
 app.use((erro, req, res, next) => {
+  if (erro.type === 'entity.parse.failed') return res.status(400).json({ erro: 'Corpo da requisição inválido (JSON mal formatado)' });
   const status = erro.status >= 400 && erro.status < 600 ? erro.status : 500;
   if (status === 500) console.error(erro);
   res.status(status).json({ erro: status === 500 ? 'Erro interno no servidor' : erro.message });

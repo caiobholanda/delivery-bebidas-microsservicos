@@ -147,3 +147,9 @@ test('libera CORS para o front do projeto e bloqueia outros sites', async () => 
   const bloqueado = await fetch(`${base}/docs.json`, { headers: { Origin: 'https://site-qualquer.com' } });
   assert.strictEqual(bloqueado.headers.get('access-control-allow-origin'), null);
 });
+
+test('json mal formatado responde 400 com mensagem clara', async () => {
+  const resposta = await fetch(`${base}/pedidos/1/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{oi' });
+  assert.strictEqual(resposta.status, 400);
+  assert.match((await resposta.json()).erro, /JSON/);
+});

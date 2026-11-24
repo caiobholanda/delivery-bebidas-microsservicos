@@ -99,6 +99,15 @@ function estornarPagamento(pagamentoId) {
   return requisitar(`${PAGAMENTO_URL}/pagamentos/${pagamentoId}/estornar`, 'POST');
 }
 
+function listarPagamentosDoPedido(pedidoId) {
+  return requisitar(`${PAGAMENTO_URL}/pagamentos/pedido/${pedidoId}`);
+}
+
+async function buscarEntregaDoPedido(pedidoId) {
+  if (!ENTREGAS_URL) return null;
+  return requisitar(`${ENTREGAS_URL}/entregas/pedido/${pedidoId}`);
+}
+
 function confirmarPagamento(pagamentoId) {
   return requisitar(`${PAGAMENTO_URL}/pagamentos/${pagamentoId}/confirmar`, 'POST');
 }
@@ -125,6 +134,8 @@ module.exports = {
   criarPagamento,
   estornarPagamento,
   confirmarPagamento,
+  listarPagamentosDoPedido,
+  buscarEntregaDoPedido,
   gerarEntrega,
   cancelarEntrega
 };

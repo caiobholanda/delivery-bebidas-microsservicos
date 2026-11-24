@@ -138,9 +138,36 @@ router.post('/', exigirPerfil('cliente'), async (req, res) => {
   }
 });
 
+function reais(valor) {
+  return `R$ ${Number(valor).toFixed(2).replace('.', ',')}`;
+}
+
+async function conferirItensNoCatalogo(carrinho) {
+  const atuais = await Promise.all(carrinho.itens.map((item) => externos.buscarBebida(item.bebidaId).catch((erro) => {
+    if (erro.status === 404) return null;
+    throw erro;
+  })));
+  const avisos = [];
+  for (const [posicao, item] of carrinho.itens.entries()) {
+    const atual = atuais[posicao];
+    if (!atual) {
+      avisos.push(`"${item.nome}" saiu do catálogo e foi retirada do carrinho`);
+      await pool.query('DELETE FROM itens_carrinho WHERE carrinho_id = ? AND bebida_id = ?', [carrinho.carrinhoId, item.bebidaId]);
+    } else if (Number(atual.preco) !== Number(item.precoUnitario)) {
+      avisos.push(`O preço de "${atual.nome}" mudou de ${reais(item.precoUnitario)} para ${reais(atual.preco)}`);
+      await pool.query(
+        'UPDATE itens_carrinho SET nome = ?, preco_unitario = ? WHERE carrinho_id = ? AND bebida_id = ?',
+        [atual.nome, atual.preco, carrinho.carrinhoId, item.bebidaId]
+      );
+    }
+  }
+  if (avisos.length) throw erroHttp(409, `${avisos.join('. ')}. Confira o carrinho e finalize de novo.`);
+}
+
 async function finalizarPedido(idCliente, formaPagamento, endereco, cartao, trocoPara) {
   const carrinho = await montarCarrinho(idCliente);
   if (!carrinho.itens.length) throw erroHttp(400, 'Carrinho vazio');
+  await conferirItensNoCatalogo(carrinho);
   if (carrinho.cupom) await validarCupomParaCarrinho(carrinho.cupom, carrinho.subtotal);
 
   const pedidoId = await salvarPedido(idCliente, carrinho, formaPagamento, endereco);
@@ -205,24 +232,58 @@ router.get('/:id', exigirPerfil('cliente', 'administrador'), async (req, res) =>
   res.json(formatarPedido(pedido, itens));
 });
 
+async function entregaFalhou(pedidoId) {
+  const entrega = await externos.buscarEntregaDoPedido(pedidoId).catch(() => null);
+  return entrega?.status === 'falhou';
+}
+
+async function estornarSeNecessario(pagamentoId) {
+  try {
+    await externos.estornarPagamento(pagamentoId);
+  } catch (erro) {
+    if (erro.status !== 409) throw erro;
+  }
+}
+
 router.patch('/:id/cancelar', exigirPerfil('cliente', 'administrador'), async (req, res) => {
   const id = idValido(req.params.id);
   if (!id) throw erroHttp(400, 'id inválido');
   const { pedido } = await buscarPedido(id);
   garantirDono(req, pedido.cliente_id);
 
-  if (!['aguardando_pagamento', 'confirmado'].includes(pedido.status)) {
+  const podeCancelar = ['aguardando_pagamento', 'confirmado'].includes(pedido.status)
+    || (pedido.status === 'em_entrega' && await entregaFalhou(id));
+  if (!podeCancelar) {
     throw erroHttp(409, `Pedido com status "${pedido.status}" não pode ser cancelado`);
   }
 
-  if (pedido.pagamento_id) await externos.estornarPagamento(pedido.pagamento_id);
+  if (pedido.pagamento_id) await estornarSeNecessario(pedido.pagamento_id);
   await externos.restaurarEstoque(id);
   await atualizarStatus(id, 'cancelado');
-  if (pedido.status === 'confirmado') await cancelarEntregaDoPedido(id);
+  if (pedido.status !== 'aguardando_pagamento') await cancelarEntregaDoPedido(id);
 
   const atualizado = await buscarPedido(id);
   res.json(formatarPedido(atualizado.pedido, atualizado.itens));
 });
+
+const SITUACAO_DA_ENTREGA = {
+  em_entrega: ['atribuida', 'em_rota'],
+  entregue: ['em_rota', 'entregue']
+};
+
+async function conferirMudancaDeStatus(pedidoId, status) {
+  if (status === 'confirmado') {
+    const pagamentos = await externos.listarPagamentosDoPedido(pedidoId);
+    if (!pagamentos.some((pagamento) => pagamento.status === 'aprovado')) {
+      throw erroHttp(409, 'O pedido só é confirmado depois que o pagamento for aprovado');
+    }
+    return;
+  }
+  const entrega = await externos.buscarEntregaDoPedido(pedidoId);
+  if (entrega && !SITUACAO_DA_ENTREGA[status].includes(entrega.status)) {
+    throw erroHttp(409, `A entrega do pedido está "${entrega.status}" e não permite marcar o pedido como "${status}"`);
+  }
+}
 
 router.patch('/:id/status', async (req, res) => {
   const id = idValido(req.params.id);
@@ -234,6 +295,8 @@ router.patch('/:id/status', async (req, res) => {
   if (!permitidos.includes(status)) {
     throw erroHttp(409, `Não é possível mudar de "${pedido.status}" para "${status}"`);
   }
+
+  await conferirMudancaDeStatus(id, status);
 
   if (status === 'entregue' && pedido.forma_pagamento === 'dinheiro' && pedido.pagamento_id) {
     await externos.confirmarPagamento(pedido.pagamento_id);
